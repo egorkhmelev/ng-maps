@@ -23,7 +23,8 @@
     "config.coffee",
     "Gruntfile.js",
     "Makefile",
-    "package.json"
+    "package.json",
+    "README.md"
   ],
   "dependencies": {
     "jquery": "~2.1.0",

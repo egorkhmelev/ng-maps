@@ -6,6 +6,10 @@
     "start": "brunch watch --server",
     "build": "grunt"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/egorkhmelev/ng-maps.git"
+  },
   "main": "angular-maps.js",
   "author": "Egor Khmelev <hmelyoff@gmail.com>",
   "license": "MIT",

@@ -45,6 +45,6 @@ module.exports = function(grunt) {
             target = 'patch';
         }
 
-        grunt.task.run('bump-only:' + target, 'build')
+        grunt.task.run('bump-only:' + target, 'build', 'bump-commit')
     });
 };
