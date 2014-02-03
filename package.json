@@ -1,0 +1,25 @@
+{
+  "name": "angular-maps",
+  "version": "0.0.1",
+  "description": "Angular Google Maps",
+  "scripts": {
+    "start": "brunch watch --server",
+    "build": "grunt"
+  },
+  "main": "angular-maps.js",
+  "author": "Egor Khmelev <hmelyoff@gmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "grunt": "~0.4.2",
+    "grunt-cli": "~0.1.13",
+    "grunt-contrib-uglify": "~0.3.2",
+    "grunt-contrib-coffee": "~0.9.0",
+    "grunt-bump": "0.0.13",
+    "bower": "~1.2.8",
+    "auto-reload-brunch": "~1.7.1",
+    "javascript-brunch": "~1.7.1",
+    "uglify-js-brunch": "~1.7.6",
+    "coffee-script-brunch": "~1.7.3"
+  },
+  "dependencies": {}
+}

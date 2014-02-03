@@ -1,0 +1,32 @@
+{
+  "name": "angular-maps",
+  "version": "0.0.1",
+  "authors": [
+    "Egor Khmelev <hmelyoff@gmail.com>"
+  ],
+  "description": "Angular Google Maps",
+  "main": "angular-maps.js",
+  "keywords": [
+    "angular",
+    "google",
+    "maps"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "public",
+    "assets",
+    "src",
+    "bower.json",
+    "config.coffee",
+    "Gruntfile.js",
+    "Makefile",
+    "package.json"
+  ],
+  "dependencies": {
+    "jquery": "~2.1.0",
+    "angular": "~1.2.10"
+  }
+}
