@@ -3,8 +3,9 @@
   "version": "0.0.2",
   "description": "Angular Google Maps",
   "scripts": {
-    "start": "brunch watch --server",
-    "build": "grunt"
+    "start": "make",
+    "build": "grunt build",
+    "release": "grunt release"
   },
   "repository": {
     "type": "git",
