@@ -1,5 +1,7 @@
 ((angular) ->
 
+    module = angular.module("ngMaps", [])
+
     ng = angular.injector(["ng"])
     $document = ng.get("$document")
     $window = ng.get("$window")
@@ -180,18 +182,31 @@
             loadingClass = 'ng-map-loading'
             element.addClass(loadingClass)
 
+            getEventName = (s) ->
+                nameArray = s.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase().split("-")
+                nameArray.shift()
+                if nameArray.length
+                    return nameArray.join("_")
+
             $maps().then (gmaps) ->
+                ctrl.api = gmaps
+                ctrl.api.visualRefresh = true
+
                 options = angular.extend({}, defaultOptions, $parse(attrs.options)(scope))
                 element.removeClass(loadingClass)
 
-                ctrl.api = gmaps
-                ctrl.api.visualRefresh = true
                 ctrl.map = new ctrl.api.Map(element[0], options)
 
-                if 'ngMapClick' of attrs
-                    ctrl.map.addListener "click", ->
-                        $timeout ->
-                            $parse(attrs.ngMapClick)(scope)
+                for k, v of attrs
+                    continue unless k.indexOf("event") is 0
+                    if (eventName = getEventName(k))
+                        do (k, v) ->
+                            ctrl.map.addListener eventName, (event) ->
+                                locals = {}
+                                locals["$event"] = event if event
+
+                                $timeout ->
+                                    $parse(v)(scope, locals)
 
                 $timeout ->
                     # transclude and parse all child directives
@@ -264,7 +279,6 @@
             scope.$on "$destroy", ->
                 ngMap.api.event.removeListener(zoomListener)
 
-
     MapMarkerDirective = ($parse) ->
         restrict: "ACE"
         require: ["^ngMap", "?ngModel"]
@@ -315,57 +329,6 @@
                 ngMap.removeMarker($marker)
                 $parse(attrs.onRemove)(scope) if 'onRemove' of attrs
 
-
-    MapMarkerSourceDirective = ($parse, $timeout) ->
-        restrict: "ACE"
-        require: "^?ngMap"
-        priority: 1000
-        transclude: 'element'
-        link: (scope, element, attrs, ngMap, transclude) ->
-            expression = attrs.ngMapMarkerSource
-            match = expression.match(/^\s*([\s\S]+?)\s+in\s+([\s\S]+?)(?:\s+track\s+by\s+([\s\S]+?))?\s*$/)
-            return unless match
-
-            lhs = match[1]
-            rhs = match[2]
-
-            destroyed = false
-            boundsTimeout = null
-            markerList = {}
-
-            scope.$watch("$ngMap.bounds", (bounds) ->
-                return unless bounds
-
-                $timeout.cancel(boundsTimeout)
-                boundsTimeout = $timeout(->
-                    $q.all($parse(rhs)(scope)).then (markers) ->
-                        return if destroyed
-                        toRemove = Object.keys(markerList)
-
-                        for m in markers
-                            key = m.id + ''
-                            index = toRemove.indexOf(key)
-                            toRemove.splice(index, 1) if index != -1
-
-                            unless key of markerList
-                                childScope = scope.$new()
-                                childScope[lhs] = m
-                                transclude(childScope, (clone) ->
-                                    clone.insertAfter(element)
-                                )
-                                markerList[key] = childScope
-
-                        for id in toRemove
-                            markerList[id].$destroy()
-                            delete markerList[id]
-                , 500)
-            , true)
-
-            scope.$on "$destroy", ->
-                destroyed = true
-                $timeout.cancel(boundsTimeout)
-
-
     MapLayerDirective = ($timeout, $parse) ->
         restrict: "ACE"
         require: "^ngMap"
@@ -391,13 +354,54 @@
 
                 return $infoWindow
 
-    angular.module("ngMaps", [])
+    $MapControlDirective = (p) ->
+        positions = (p, api) ->
+            {
+                'tc': api.TOP_CENTER
+                'tl': api.TOP_LEFT
+                'tr': api.TOP_RIGHT
+                'lt': api.LEFT_TOP
+                'rt': api.RIGHT_TOP
+                'lc': api.LEFT_CENTER
+                'rc': api.RIGHT_CENTER
+                'lb': api.LEFT_BOTTOM
+                'rb': api.RIGHT_BOTTOM
+                'bc': api.BOTTOM_CENTER
+                'bl': api.BOTTOM_LEFT
+                'br': api.BOTTOM_RIGHT
+            }[p]
+
+        [->
+            restrict: "ACE"
+            require: "^ngMap"
+            transclude: true
+            scope: true
+            link: (scope, element, attrs, ngMap, transclude) ->
+                controlElement = angular.element("<div>").append(transclude())
+                ngMap.map.controls[positions(p, ngMap.api.ControlPosition)].push(controlElement[0])
+        ]
+
+    module
         .provider("$ngMaps", [MapsProvider])
+
         .directive("ngMap", ["$parse", "$timeout", MapDirective])
         .directive("ngMapCenter", ["$timeout", MapCenterDirective])
         .directive("ngMapZoom", ["$timeout", MapZoomDirective])
+
         .directive("ngMapMarker", ["$parse", MapMarkerDirective])
-        .directive("ngMapMarkerSource", ["$parse", "$timeout", MapMarkerSourceDirective])
         .directive("ngMapLayer", ["$timeout", "$parse", MapLayerDirective])
+
+        .directive("ngMapTc", $MapControlDirective('tc'))
+        .directive("ngMapTl", $MapControlDirective('tl'))
+        .directive("ngMapTr", $MapControlDirective('tr'))
+        .directive("ngMapLt", $MapControlDirective('lt'))
+        .directive("ngMapRt", $MapControlDirective('rt'))
+        .directive("ngMapLc", $MapControlDirective('lc'))
+        .directive("ngMapRc", $MapControlDirective('rc'))
+        .directive("ngMapLb", $MapControlDirective('lb'))
+        .directive("ngMapRb", $MapControlDirective('rb'))
+        .directive("ngMapBc", $MapControlDirective('bc'))
+        .directive("ngMapBl", $MapControlDirective('bl'))
+        .directive("ngMapBr", $MapControlDirective('br'))
 
 )(window.angular)

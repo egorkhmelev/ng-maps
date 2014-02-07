@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html ng-app="app">
+<head>
+    <title>Hello world</title>
+
+    <style type="text/css">
+
+        html { height: 100% }
+        body { height: 100%; margin: 0; padding: 0 }
+
+        .ng-map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .ng-map .ng-map-center, .ng-map .ng-map-zoom, .ng-map .ng-map-marker {
+            display: none;
+        }
+
+        .marker {
+            width: 10px;
+            height: 10px;
+            background: red;
+            text-align: center;
+            border-radius: 50%;
+            color: white;
+            cursor: pointer;
+
+            -webkit-transition: box-shadow .2s;
+        }
+
+        .marker.marker-active {
+            box-shadow: 0 0 0 18px rgba(255, 0, 0, 0.25);
+        }
+
+        .corners {
+            font-weight: bold;
+        }
+
+    </style>
+</head>
+<body ng-controller="AppCtrl">
+    <div class="ng-map" options="{panControl: false, zoomControlOptions: { position: $ngMap.api.ControlPosition.LEFT_CENTER }}" event-click="AppCtrl.click($event)">
+        <div class="ng-map-center" lat="-34.397" lng="150.644"></div>
+        <div class="ng-map-zoom" value="10"></div>
+
+        <div class="ng-map-marker ng-cloak" ng-repeat="m in AppCtrl.markers" lat="m.lat" lng="m.lng">
+            <div class="marker" ng-class="{'marker-active': AppCtrl.current == $index}" ng-click="AppCtrl.marker($event, $index)" ng-dblclick="AppCtrl.remove($index)"></div>
+        </div>
+
+    </div>
+
+    <script type="text/javascript" src="/vendor.js"></script>
+    <script type="text/javascript" src="/angular-maps.js"></script>
+    <script type="text/javascript">
+        angular.module('app', ["ngMaps"])
+
+            .config(function($ngMapsProvider){
+
+                // Default map options
+                $ngMapsProvider.options({
+                    "styles": [
+                        {"stylers": [{"saturation": -100}, {"lightness": 30}]}
+                    ]
+                });
+            })
+
+            .controller("AppCtrl", function($scope){
+                $scope.AppCtrl = this;
+
+                this.current = 0;
+                this.markers = [
+                    {lat: "-34.397", lng: "150.644"},
+                    {lat: "-34.3651062", lng: "150.8656033"},
+                    {lat: "-34.2791925", lng: "150.6867321"},
+                    {lat: "-34.4831999", lng: "150.487605"}
+                ];
+
+                this.click = function(event) {
+                    event.stop();
+                    this.markers.push({ lat: event.latLng.lat(), lng: event.latLng.lng()});
+                };
+
+                this.marker = function(event, index) {
+                    this.current = index;
+                    event.stopPropagation();
+                };
+
+                this.remove = function(index) {
+                    this.markers.splice(index, 1);
+                    this.current = null;
+                };
+            });
+    </script>
+</body>
+</html>

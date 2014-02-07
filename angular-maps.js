@@ -3,7 +3,8 @@
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
   (function(angular) {
-    var $document, $maps, $q, $window, MapCenterDirective, MapController, MapDirective, MapLayerDirective, MapMarkerDirective, MapMarkerSourceDirective, MapZoomDirective, MapsProvider, apiKey, custom, defaultOptions, deferred, extra, ng, scriptId, src;
+    var $MapControlDirective, $document, $maps, $q, $window, MapCenterDirective, MapController, MapDirective, MapLayerDirective, MapMarkerDirective, MapZoomDirective, MapsProvider, apiKey, custom, defaultOptions, deferred, extra, module, ng, scriptId, src;
+    module = angular.module("ngMaps", []);
     ng = angular.injector(["ng"]);
     $document = ng.get("$document");
     $window = ng.get("$window");
@@ -240,23 +241,44 @@
         scope: true,
         transclude: true,
         link: function(scope, element, attrs, ctrl, transclude) {
-          var loadingClass, view;
+          var getEventName, loadingClass, view;
           view = angular.element("<div>").hide();
           loadingClass = 'ng-map-loading';
           element.addClass(loadingClass);
+          getEventName = function(s) {
+            var nameArray;
+            nameArray = s.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase().split("-");
+            nameArray.shift();
+            if (nameArray.length) {
+              return nameArray.join("_");
+            }
+          };
           return $maps().then(function(gmaps) {
-            var options;
-            options = angular.extend({}, defaultOptions, $parse(attrs.options)(scope));
-            element.removeClass(loadingClass);
+            var eventName, k, options, v;
             ctrl.api = gmaps;
             ctrl.api.visualRefresh = true;
+            options = angular.extend({}, defaultOptions, $parse(attrs.options)(scope));
+            element.removeClass(loadingClass);
             ctrl.map = new ctrl.api.Map(element[0], options);
-            if ('ngMapClick' in attrs) {
-              ctrl.map.addListener("click", function() {
-                return $timeout(function() {
-                  return $parse(attrs.ngMapClick)(scope);
-                });
-              });
+            for (k in attrs) {
+              v = attrs[k];
+              if (k.indexOf("event") !== 0) {
+                continue;
+              }
+              if ((eventName = getEventName(k))) {
+                (function(k, v) {
+                  return ctrl.map.addListener(eventName, function(event) {
+                    var locals;
+                    locals = {};
+                    if (event) {
+                      locals["$event"] = event;
+                    }
+                    return $timeout(function() {
+                      return $parse(v)(scope, locals);
+                    });
+                  });
+                })(k, v);
+              }
             }
             return $timeout(function() {
               return transclude(scope, function(clone) {
@@ -408,69 +430,6 @@
         }
       };
     };
-    MapMarkerSourceDirective = function($parse, $timeout) {
-      return {
-        restrict: "ACE",
-        require: "^?ngMap",
-        priority: 1000,
-        transclude: 'element',
-        link: function(scope, element, attrs, ngMap, transclude) {
-          var boundsTimeout, destroyed, expression, lhs, markerList, match, rhs;
-          expression = attrs.ngMapMarkerSource;
-          match = expression.match(/^\s*([\s\S]+?)\s+in\s+([\s\S]+?)(?:\s+track\s+by\s+([\s\S]+?))?\s*$/);
-          if (!match) {
-            return;
-          }
-          lhs = match[1];
-          rhs = match[2];
-          destroyed = false;
-          boundsTimeout = null;
-          markerList = {};
-          scope.$watch("$ngMap.bounds", function(bounds) {
-            if (!bounds) {
-              return;
-            }
-            $timeout.cancel(boundsTimeout);
-            return boundsTimeout = $timeout(function() {
-              return $q.all($parse(rhs)(scope)).then(function(markers) {
-                var childScope, id, index, key, m, toRemove, _i, _j, _len, _len1, _results;
-                if (destroyed) {
-                  return;
-                }
-                toRemove = Object.keys(markerList);
-                for (_i = 0, _len = markers.length; _i < _len; _i++) {
-                  m = markers[_i];
-                  key = m.id + '';
-                  index = toRemove.indexOf(key);
-                  if (index !== -1) {
-                    toRemove.splice(index, 1);
-                  }
-                  if (!(key in markerList)) {
-                    childScope = scope.$new();
-                    childScope[lhs] = m;
-                    transclude(childScope, function(clone) {
-                      return clone.insertAfter(element);
-                    });
-                    markerList[key] = childScope;
-                  }
-                }
-                _results = [];
-                for (_j = 0, _len1 = toRemove.length; _j < _len1; _j++) {
-                  id = toRemove[_j];
-                  markerList[id].$destroy();
-                  _results.push(delete markerList[id]);
-                }
-                return _results;
-              });
-            }, 500);
-          }, true);
-          return scope.$on("$destroy", function() {
-            destroyed = true;
-            return $timeout.cancel(boundsTimeout);
-          });
-        }
-      };
-    };
     MapLayerDirective = function($timeout, $parse) {
       return {
         restrict: "ACE",
@@ -504,7 +463,41 @@
         }
       };
     };
-    return angular.module("ngMaps", []).provider("$ngMaps", [MapsProvider]).directive("ngMap", ["$parse", "$timeout", MapDirective]).directive("ngMapCenter", ["$timeout", MapCenterDirective]).directive("ngMapZoom", ["$timeout", MapZoomDirective]).directive("ngMapMarker", ["$parse", MapMarkerDirective]).directive("ngMapMarkerSource", ["$parse", "$timeout", MapMarkerSourceDirective]).directive("ngMapLayer", ["$timeout", "$parse", MapLayerDirective]);
+    $MapControlDirective = function(p) {
+      var positions;
+      positions = function(p, api) {
+        return {
+          'tc': api.TOP_CENTER,
+          'tl': api.TOP_LEFT,
+          'tr': api.TOP_RIGHT,
+          'lt': api.LEFT_TOP,
+          'rt': api.RIGHT_TOP,
+          'lc': api.LEFT_CENTER,
+          'rc': api.RIGHT_CENTER,
+          'lb': api.LEFT_BOTTOM,
+          'rb': api.RIGHT_BOTTOM,
+          'bc': api.BOTTOM_CENTER,
+          'bl': api.BOTTOM_LEFT,
+          'br': api.BOTTOM_RIGHT
+        }[p];
+      };
+      return [
+        function() {
+          return {
+            restrict: "ACE",
+            require: "^ngMap",
+            transclude: true,
+            scope: true,
+            link: function(scope, element, attrs, ngMap, transclude) {
+              var controlElement;
+              controlElement = angular.element("<div>").append(transclude());
+              return ngMap.map.controls[positions(p, ngMap.api.ControlPosition)].push(controlElement[0]);
+            }
+          };
+        }
+      ];
+    };
+    return module.provider("$ngMaps", [MapsProvider]).directive("ngMap", ["$parse", "$timeout", MapDirective]).directive("ngMapCenter", ["$timeout", MapCenterDirective]).directive("ngMapZoom", ["$timeout", MapZoomDirective]).directive("ngMapMarker", ["$parse", MapMarkerDirective]).directive("ngMapLayer", ["$timeout", "$parse", MapLayerDirective]).directive("ngMapTc", $MapControlDirective('tc')).directive("ngMapTl", $MapControlDirective('tl')).directive("ngMapTr", $MapControlDirective('tr')).directive("ngMapLt", $MapControlDirective('lt')).directive("ngMapRt", $MapControlDirective('rt')).directive("ngMapLc", $MapControlDirective('lc')).directive("ngMapRc", $MapControlDirective('rc')).directive("ngMapLb", $MapControlDirective('lb')).directive("ngMapRb", $MapControlDirective('rb')).directive("ngMapBc", $MapControlDirective('bc')).directive("ngMapBl", $MapControlDirective('bl')).directive("ngMapBr", $MapControlDirective('br'));
   })(window.angular);
 
 }).call(this);
