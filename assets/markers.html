@@ -13,7 +13,8 @@
             height: 100%;
         }
 
-        .ng-map .ng-map-center, .ng-map .ng-map-zoom, .ng-map .ng-map-marker {
+        [class^="ng-map-"],
+        [class*=" ng-map-"] {
             display: none;
         }
 
@@ -44,7 +45,7 @@
         <div class="ng-map-center" lat="-34.397" lng="150.644"></div>
         <div class="ng-map-zoom" value="10"></div>
 
-        <div class="ng-map-marker ng-cloak" ng-repeat="m in AppCtrl.markers" lat="m.lat" lng="m.lng">
+        <div class="ng-map-marker" ng-repeat="m in AppCtrl.markers" lat="m.lat" lng="m.lng">
             <div class="marker" ng-class="{'marker-active': AppCtrl.current == $index}" ng-click="AppCtrl.marker($event, $index)" ng-dblclick="AppCtrl.remove($index)"></div>
         </div>
 

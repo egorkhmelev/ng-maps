@@ -13,7 +13,8 @@
             height: 100%;
         }
 
-        .ng-map .ng-map-center, .ng-map .ng-map-zoom {
+        [class^="ng-map-"],
+        [class*=" ng-map-"] {
             display: none;
         }
     </style>
@@ -22,6 +23,7 @@
     <div class="ng-map">
         <div class="ng-map-center" lat="-34.397" lng="150.644"></div>
         <div class="ng-map-zoom" value="8"></div>
+        <div class="ng-map-marker" lat="-34.397" lng="150.644"></div>
     </div>
 
     <script type="text/javascript" src="/vendor.js"></script>
