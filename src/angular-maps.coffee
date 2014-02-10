@@ -204,15 +204,13 @@
                     continue unless k.indexOf("event") is 0
                     if (eventName = getEventName(k))
                         do (k, v) ->
-                            addListener = angular.bind(ctrl.map, ctrl.map.addListener)
-                            saveForRemove = true
+                            eventType = "addListener"
 
                             if eventName is "ready"
-                                saveForRemove = false
                                 eventName = "idle"
-                                addListener = angular.bind(ctrl.map, ctrl.api.event.addListenerOnce, ctrl.map)
+                                eventType = "addListenerOnce"
 
-                            listener = addListener(eventName, (event) ->
+                            listener = ctrl.api.event[eventType](ctrl.map, eventName, (event) ->
                                 locals = {}
                                 locals["$event"] = event if event
 
@@ -220,7 +218,7 @@
                                     $parse(v)(scope, locals)
                             )
 
-                            mapEventListeners.push(listener) if saveForRemove
+                            mapEventListeners.push(listener)
 
                 centerListener = ctrl.map.addListener "center_changed", ->
                     center = ctrl.map.getCenter()
@@ -254,8 +252,8 @@
                     ctrl.api.event.removeListener(boundsListener)
 
                     # remove all map event listeners
-                    for l in mapEventListeners
-                        ctrl.api.event.removeListener(ctrl.map, l)
+                    ctrl.api.event.removeListener(l) for l in mapEventListeners
+
 
                 $timeout ->
                     # transclude and parse all child directives

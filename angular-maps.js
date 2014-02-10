@@ -261,15 +261,13 @@
               }
               if ((eventName = getEventName(k))) {
                 (function(k, v) {
-                  var addListener, listener, saveForRemove;
-                  addListener = angular.bind(ctrl.map, ctrl.map.addListener);
-                  saveForRemove = true;
+                  var eventType, listener;
+                  eventType = "addListener";
                   if (eventName === "ready") {
-                    saveForRemove = false;
                     eventName = "idle";
-                    addListener = angular.bind(ctrl.map, ctrl.api.event.addListenerOnce, ctrl.map);
+                    eventType = "addListenerOnce";
                   }
-                  listener = addListener(eventName, function(event) {
+                  listener = ctrl.api.event[eventType](ctrl.map, eventName, function(event) {
                     var locals;
                     locals = {};
                     if (event) {
@@ -279,9 +277,7 @@
                       return $parse(v)(scope, locals);
                     });
                   });
-                  if (saveForRemove) {
-                    return mapEventListeners.push(listener);
-                  }
+                  return mapEventListeners.push(listener);
                 })(k, v);
               }
             }
@@ -327,7 +323,7 @@
               _results = [];
               for (_i = 0, _len = mapEventListeners.length; _i < _len; _i++) {
                 l = mapEventListeners[_i];
-                _results.push(ctrl.api.event.removeListener(ctrl.map, l));
+                _results.push(ctrl.api.event.removeListener(l));
               }
               return _results;
             });
