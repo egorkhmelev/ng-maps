@@ -257,9 +257,11 @@
               }
               if ((eventName = getEventName(k))) {
                 (function(k, v) {
-                  var addListener, listener;
+                  var addListener, listener, saveForRemove;
                   addListener = ctrl.map.addListener;
+                  saveForRemove = true;
                   if (eventName === "ready") {
+                    saveForRemove = false;
                     eventName = "idle";
                     addListener = function(name, handler) {
                       if (handler == null) {
@@ -278,7 +280,9 @@
                       return $parse(v)(scope, locals);
                     });
                   });
-                  return mapEventListeners.push(listener);
+                  if (saveForRemove) {
+                    return mapEventListeners.push(listener);
+                  }
                 })(k, v);
               }
             }

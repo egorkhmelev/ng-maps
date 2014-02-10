@@ -202,8 +202,10 @@
                     if (eventName = getEventName(k))
                         do (k, v) ->
                             addListener = ctrl.map.addListener
+                            saveForRemove = true
 
                             if eventName is "ready"
+                                saveForRemove = false
                                 eventName = "idle"
                                 addListener = (name, handler = angular.noop) ->
                                     ctrl.api.event.addListenerOnce(ctrl.map, name, handler)
@@ -215,7 +217,7 @@
                                 $timeout ->
                                     $parse(v)(scope, locals)
 
-                            mapEventListeners.push(listener)
+                            mapEventListeners.push(listener) if saveForRemove
 
                 centerListener = ctrl.map.addListener "center_changed", ->
                     center = ctrl.map.getCenter()
