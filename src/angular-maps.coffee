@@ -26,6 +26,7 @@
                 @$element.css(position: "absolute")
 
                 @$position = options.position
+                @$$anchor = options.anchor
 
                 @$events = ['dblclick']
                 @$preventEvent = (event) ->
@@ -50,12 +51,13 @@
                 projection = @getProjection()
                 return if !@$position || !projection
 
-                w = @$element.width()
-                h = @$element.height()
+                w = @$element.outerWidth()
+                h = @$element.outerHeight()
+                anchor = angular.extend({x: 0, y: 0}, @$$anchor(w, h))
 
                 position = projection.fromLatLngToDivPixel(@$position)
-                position.x = Math.round(position.x - w/2)
-                position.y = Math.round(position.y - h/2)
+                position.x = Math.round(position.x - anchor.x)
+                position.y = Math.round(position.y - anchor.y)
 
                 @$element.css(left: position.x, top: position.y)
 
@@ -152,32 +154,24 @@
         return
 
     MapController = ($scope, $timeout) ->
+        $scope.$ngMap = this
+
         @map = null
         @center = null
         @zoom = null
         @bounds = null
 
-        @$$markers = []
-
-        @addMarker = (marker) =>
-            return unless marker
-            @$$markers.push(marker)
-
-        @removeMarker = (marker) =>
-            return unless marker
-            index = @$$markers.indexOf(marker)
-            @$$markers.splice(index, 1) if index != -1
-
-        $scope.$ngMap = this
         return
 
 
-    MapDirective = ($parse, $timeout) ->
+    MapDirective = ($parse, $timeout, $window) ->
         restrict: "ACE"
         controller: ["$scope", "$timeout", MapController]
         scope: true
         transclude: true
         link: (scope, element, attrs, ctrl, transclude) ->
+            $$window = angular.element($window)
+
             view = angular.element("<div>").hide()
             loadingClass = 'ng-map-loading'
             element.addClass(loadingClass)
@@ -197,16 +191,66 @@
 
                 ctrl.map = new ctrl.api.Map(element[0], options)
 
+                onResize = ->
+                    ctrl.api.event.trigger(ctrl.map, 'resize')
+
+                $$window.on("resize", onResize)
+
+                mapEventListeners = []
                 for k, v of attrs
                     continue unless k.indexOf("event") is 0
                     if (eventName = getEventName(k))
                         do (k, v) ->
-                            ctrl.map.addListener eventName, (event) ->
+                            addListener = ctrl.map.addListener
+
+                            if eventName is "ready"
+                                eventName = "idle"
+                                addListener = (name, handler = angular.noop) ->
+                                    ctrl.api.event.addListenerOnce(ctrl.map, name, handler)
+
+                            listener = addListener eventName, (event) ->
                                 locals = {}
                                 locals["$event"] = event if event
 
                                 $timeout ->
                                     $parse(v)(scope, locals)
+
+                            mapEventListeners.push(listener)
+
+                centerListener = ctrl.map.addListener "center_changed", ->
+                    center = ctrl.map.getCenter()
+                    $timeout ->
+                        ctrl.center = lat: center.lat(), lng: center.lng()
+
+                zoomListener = ctrl.map.addListener "zoom_changed", ->
+                    $timeout ->
+                        ctrl.zoom = ctrl.map.getZoom()
+
+                boundsListener = ctrl.map.addListener "bounds_changed", ->
+                    bounds = ctrl.map.getBounds()
+                    ne = bounds.getNorthEast()
+                    sw = bounds.getSouthWest()
+
+                    $timeout ->
+                        ctrl.bounds = {
+                            ne:
+                                lat: ne.lat()
+                                lng: ne.lng()
+                            sw:
+                                lat: sw.lat()
+                                lng: sw.lng()
+                        }
+
+                scope.$on "$destroy", ->
+                    $$window.off("resize", onResize)
+
+                    ctrl.api.event.removeListener(centerListener)
+                    ctrl.api.event.removeListener(zoomListener)
+                    ctrl.api.event.removeListener(boundsListener)
+
+                    # remove all map event listeners
+                    for l in mapEventListeners
+                        ctrl.api.event.removeListener(ctrl.map, l)
 
                 $timeout ->
                     # transclude and parse all child directives
@@ -218,74 +262,48 @@
 
     MapCenterDirective = ($timeout) ->
         restrict: "ACE"
-        require: ["^ngMap", "?ngModel"]
+        require: "^ngMap"
         scope:
             lat: "=lat"
             lng: "=lng"
-        link: (scope, element, attrs, ctrls) ->
-            [ngMap, ngModel] = ctrls
-
+        link: (scope, element, attrs, ctrl) ->
             scope.$watch(->
                 lat: scope.lat
                 lng: scope.lng
             , (center) ->
                 return if !center.lat || !center.lng
-                ngMap.map.setCenter(
-                    new ngMap.api.LatLng(center.lat, center.lng)
+                ctrl.map.setCenter(
+                    new ctrl.api.LatLng(center.lat, center.lng)
                 )
             , true)
 
-            centerListener = ngMap.map.addListener "center_changed", ->
-                center = ngMap.map.getCenter()
-                $timeout ->
-                    ngMap.center = lat: center.lat(), lng: center.lng()
-
-            boundsListener = ngMap.map.addListener "bounds_changed", ->
-                bounds = ngMap.map.getBounds()
-                ne = bounds.getNorthEast()
-                sw = bounds.getSouthWest()
-
-                $timeout ->
-                    ngMap.bounds = {
-                        ne:
-                            lat: ne.lat()
-                            lng: ne.lng()
-                        sw:
-                            lat: sw.lat()
-                            lng: sw.lng()
-                    }
-
-            scope.$on "$destroy", ->
-                ngMap.api.event.removeListener(centerListener)
-                ngMap.api.event.removeListener(boundsListener)
-
     MapZoomDirective = ($timeout) ->
         restrict: "ACE"
-        require: ["^ngMap", "?ngModel"]
+        require: "^ngMap"
         scope:
             zoom: "=value"
-        link: (scope, element, attrs, ctrls) ->
-            [ngMap, ngModel] = ctrls
-
+        link: (scope, element, attrs, ctrl) ->
             scope.$watch("zoom", (zoom) ->
                 return unless zoom
-                ngMap.map.setZoom(zoom)
+                ctrl.map.setZoom(zoom)
             )
 
-            zoomListener = ngMap.map.addListener "zoom_changed", ->
-                $timeout ->
-                    ngMap.zoom = ngMap.map.getZoom()
-
-            scope.$on "$destroy", ->
-                ngMap.api.event.removeListener(zoomListener)
+    MapFitDirective = ($timeout) ->
+        restrict: "ACE"
+        require: "^ngMap"
+        scope:
+            bounds: "=bounds"
+        link: (scope, element, attrs, ctrl) ->
+            scope.$watch("bounds", (bounds) ->
+                return unless bounds
+                ctrl.map.fitBounds(bounds)
+            )
 
     MapMarkerDirective = ($parse) ->
         restrict: "ACE"
-        require: ["^ngMap", "?ngModel"]
+        require: "^ngMap"
         scope: true
-        link: (scope, element, attrs, ctrls) ->
-            [ngMap, ngModel] = ctrls
-
+        link: (scope, element, attrs, ctrl) ->
             contents = element.contents()
             markerNode = contents.filter("*")
             isCustomLayout =  markerNode.length > 0
@@ -294,14 +312,18 @@
                 scope: scope
             }
 
+            centerAnchor = "{x: $width / 2, y: $height / 2}"
+            getAnchor = (w, h) ->
+                (attrs.anchor && $parse(attrs.anchor) || $parse(centerAnchor))(scope, {$width: w, $height: h})
+
             createMarker = ->
                 m = null
 
                 if isCustomLayout > 0 # Custom marker layout
-                    m = new custom.Marker(element: markerNode.first())
+                    m = new custom.Marker(element: markerNode.first(), anchor: getAnchor)
 
                 else # Default layout
-                    m = new ngMap.api.Marker()
+                    m = new ctrl.api.Marker()
 
                 return m
 
@@ -314,43 +336,40 @@
             , (position) ->
                 isVisible = !!$marker.marker
                 $marker.marker ||= createMarker()
-                $marker.marker.setPosition(new ngMap.api.LatLng(position.lat, position.lng))
-                $marker.marker.setMap(ngMap.map)
+                $marker.marker.setPosition(new ctrl.api.LatLng(position.lat, position.lng))
+                $marker.marker.setMap(ctrl.map)
 
                 scope.$marker = $marker.marker
-                ngMap.addMarker($marker)
-
                 $parse(attrs.onAdd)(scope) if !isVisible && 'onAdd' of attrs
             , true
 
             scope.$on "$destroy", ->
                 unwatch()
                 $marker.marker.setMap(null)
-                ngMap.removeMarker($marker)
                 $parse(attrs.onRemove)(scope) if 'onRemove' of attrs
 
     MapLayerDirective = ($timeout, $parse) ->
         restrict: "ACE"
         require: "^ngMap"
         transclude: true
-        link: (scope, element, attrs, ngMap, transclude) ->
+        link: (scope, element, attrs, ctrl, transclude) ->
 
             infoWindowList = []
             shouldPan = $parse(attrs.pan)(scope) || false
 
-            ngMap[attrs.name || "infoWindow"] = (lat, lng, locals = {}) ->
+            ctrl[attrs.name || "infoWindow"] = (lat, lng, locals = {}) ->
 
                 $infoWindow = {
                     scope: angular.extend(scope.$new(), locals)
                 }
 
-                $infoWindow.customWindow = new custom.Window(position: new ngMap.api.LatLng(lat, lng), content: transclude($infoWindow.scope, angular.noop), pan: shouldPan)
+                $infoWindow.customWindow = new custom.Window(position: new ctrl.api.LatLng(lat, lng), content: transclude($infoWindow.scope, angular.noop), pan: shouldPan)
 
                 $infoWindow.scope.$on "$destroy", ->
                     $infoWindow.customWindow.close()
 
                 $timeout ->
-                    $infoWindow.customWindow.open(ngMap.map)
+                    $infoWindow.customWindow.open(ctrl.map)
 
                 return $infoWindow
 
@@ -376,17 +395,18 @@
             require: "^ngMap"
             transclude: true
             scope: true
-            link: (scope, element, attrs, ngMap, transclude) ->
+            link: (scope, element, attrs, ctrl, transclude) ->
                 controlElement = angular.element("<div>").append(transclude())
-                ngMap.map.controls[positions(p, ngMap.api.ControlPosition)].push(controlElement[0])
+                ctrl.map.controls[positions(p, ctrl.api.ControlPosition)].push(controlElement[0])
         ]
 
     module
         .provider("$ngMaps", [MapsProvider])
 
-        .directive("ngMap", ["$parse", "$timeout", MapDirective])
+        .directive("ngMap", ["$parse", "$timeout", "$window", MapDirective])
         .directive("ngMapCenter", ["$timeout", MapCenterDirective])
         .directive("ngMapZoom", ["$timeout", MapZoomDirective])
+        .directive("ngMapFit", ["$timeout", MapFitDirective])
 
         .directive("ngMapMarker", ["$parse", MapMarkerDirective])
         .directive("ngMapLayer", ["$timeout", "$parse", MapLayerDirective])

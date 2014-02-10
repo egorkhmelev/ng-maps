@@ -3,7 +3,7 @@
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
   (function(angular) {
-    var $MapControlDirective, $document, $maps, $q, $window, MapCenterDirective, MapController, MapDirective, MapLayerDirective, MapMarkerDirective, MapZoomDirective, MapsProvider, apiKey, custom, defaultOptions, deferred, extra, module, ng, scriptId, src;
+    var $MapControlDirective, $document, $maps, $q, $window, MapCenterDirective, MapController, MapDirective, MapFitDirective, MapLayerDirective, MapMarkerDirective, MapZoomDirective, MapsProvider, apiKey, custom, defaultOptions, deferred, extra, module, ng, scriptId, src;
     module = angular.module("ngMaps", []);
     ng = angular.injector(["ng"]);
     $document = ng.get("$document");
@@ -28,6 +28,7 @@
             position: "absolute"
           });
           this.$position = options.position;
+          this.$$anchor = options.anchor;
           this.$events = ['dblclick'];
           this.$preventEvent = function(event) {
             return event.stopPropagation();
@@ -61,16 +62,20 @@
         };
 
         Marker.prototype.draw = function() {
-          var h, position, projection, w;
+          var anchor, h, position, projection, w;
           projection = this.getProjection();
           if (!this.$position || !projection) {
             return;
           }
-          w = this.$element.width();
-          h = this.$element.height();
+          w = this.$element.outerWidth();
+          h = this.$element.outerHeight();
+          anchor = angular.extend({
+            x: 0,
+            y: 0
+          }, this.$$anchor(w, h));
           position = projection.fromLatLngToDivPixel(this.$position);
-          position.x = Math.round(position.x - w / 2);
-          position.y = Math.round(position.y - h / 2);
+          position.x = Math.round(position.x - anchor.x);
+          position.y = Math.round(position.y - anchor.y);
           return this.$element.css({
             left: position.x,
             top: position.y
@@ -207,41 +212,21 @@
       };
     };
     MapController = function($scope, $timeout) {
+      $scope.$ngMap = this;
       this.map = null;
       this.center = null;
       this.zoom = null;
       this.bounds = null;
-      this.$$markers = [];
-      this.addMarker = (function(_this) {
-        return function(marker) {
-          if (!marker) {
-            return;
-          }
-          return _this.$$markers.push(marker);
-        };
-      })(this);
-      this.removeMarker = (function(_this) {
-        return function(marker) {
-          var index;
-          if (!marker) {
-            return;
-          }
-          index = _this.$$markers.indexOf(marker);
-          if (index !== -1) {
-            return _this.$$markers.splice(index, 1);
-          }
-        };
-      })(this);
-      $scope.$ngMap = this;
     };
-    MapDirective = function($parse, $timeout) {
+    MapDirective = function($parse, $timeout, $window) {
       return {
         restrict: "ACE",
         controller: ["$scope", "$timeout", MapController],
         scope: true,
         transclude: true,
         link: function(scope, element, attrs, ctrl, transclude) {
-          var getEventName, loadingClass, view;
+          var $$window, getEventName, loadingClass, view;
+          $$window = angular.element($window);
           view = angular.element("<div>").hide();
           loadingClass = 'ng-map-loading';
           element.addClass(loadingClass);
@@ -254,12 +239,17 @@
             }
           };
           return $maps().then(function(gmaps) {
-            var eventName, k, options, v;
+            var boundsListener, centerListener, eventName, k, mapEventListeners, onResize, options, v, zoomListener;
             ctrl.api = gmaps;
             ctrl.api.visualRefresh = true;
             options = angular.extend({}, defaultOptions, $parse(attrs.options)(scope));
             element.removeClass(loadingClass);
             ctrl.map = new ctrl.api.Map(element[0], options);
+            onResize = function() {
+              return ctrl.api.event.trigger(ctrl.map, 'resize');
+            };
+            $$window.on("resize", onResize);
+            mapEventListeners = [];
             for (k in attrs) {
               v = attrs[k];
               if (k.indexOf("event") !== 0) {
@@ -267,7 +257,18 @@
               }
               if ((eventName = getEventName(k))) {
                 (function(k, v) {
-                  return ctrl.map.addListener(eventName, function(event) {
+                  var addListener, listener;
+                  addListener = ctrl.map.addListener;
+                  if (eventName === "ready") {
+                    eventName = "idle";
+                    addListener = function(name, handler) {
+                      if (handler == null) {
+                        handler = angular.noop;
+                      }
+                      return ctrl.api.event.addListenerOnce(ctrl.map, name, handler);
+                    };
+                  }
+                  listener = addListener(eventName, function(event) {
                     var locals;
                     locals = {};
                     if (event) {
@@ -277,9 +278,56 @@
                       return $parse(v)(scope, locals);
                     });
                   });
+                  return mapEventListeners.push(listener);
                 })(k, v);
               }
             }
+            centerListener = ctrl.map.addListener("center_changed", function() {
+              var center;
+              center = ctrl.map.getCenter();
+              return $timeout(function() {
+                return ctrl.center = {
+                  lat: center.lat(),
+                  lng: center.lng()
+                };
+              });
+            });
+            zoomListener = ctrl.map.addListener("zoom_changed", function() {
+              return $timeout(function() {
+                return ctrl.zoom = ctrl.map.getZoom();
+              });
+            });
+            boundsListener = ctrl.map.addListener("bounds_changed", function() {
+              var bounds, ne, sw;
+              bounds = ctrl.map.getBounds();
+              ne = bounds.getNorthEast();
+              sw = bounds.getSouthWest();
+              return $timeout(function() {
+                return ctrl.bounds = {
+                  ne: {
+                    lat: ne.lat(),
+                    lng: ne.lng()
+                  },
+                  sw: {
+                    lat: sw.lat(),
+                    lng: sw.lng()
+                  }
+                };
+              });
+            });
+            scope.$on("$destroy", function() {
+              var l, _i, _len, _results;
+              $$window.off("resize", onResize);
+              ctrl.api.event.removeListener(centerListener);
+              ctrl.api.event.removeListener(zoomListener);
+              ctrl.api.event.removeListener(boundsListener);
+              _results = [];
+              for (_i = 0, _len = mapEventListeners.length; _i < _len; _i++) {
+                l = mapEventListeners[_i];
+                _results.push(ctrl.api.event.removeListener(ctrl.map, l));
+              }
+              return _results;
+            });
             return $timeout(function() {
               return transclude(scope, function(clone) {
                 view.append(clone);
@@ -293,15 +341,13 @@
     MapCenterDirective = function($timeout) {
       return {
         restrict: "ACE",
-        require: ["^ngMap", "?ngModel"],
+        require: "^ngMap",
         scope: {
           lat: "=lat",
           lng: "=lng"
         },
-        link: function(scope, element, attrs, ctrls) {
-          var boundsListener, centerListener, ngMap, ngModel;
-          ngMap = ctrls[0], ngModel = ctrls[1];
-          scope.$watch(function() {
+        link: function(scope, element, attrs, ctrl) {
+          return scope.$watch(function() {
             return {
               lat: scope.lat,
               lng: scope.lng
@@ -310,66 +356,41 @@
             if (!center.lat || !center.lng) {
               return;
             }
-            return ngMap.map.setCenter(new ngMap.api.LatLng(center.lat, center.lng));
+            return ctrl.map.setCenter(new ctrl.api.LatLng(center.lat, center.lng));
           }, true);
-          centerListener = ngMap.map.addListener("center_changed", function() {
-            var center;
-            center = ngMap.map.getCenter();
-            return $timeout(function() {
-              return ngMap.center = {
-                lat: center.lat(),
-                lng: center.lng()
-              };
-            });
-          });
-          boundsListener = ngMap.map.addListener("bounds_changed", function() {
-            var bounds, ne, sw;
-            bounds = ngMap.map.getBounds();
-            ne = bounds.getNorthEast();
-            sw = bounds.getSouthWest();
-            return $timeout(function() {
-              return ngMap.bounds = {
-                ne: {
-                  lat: ne.lat(),
-                  lng: ne.lng()
-                },
-                sw: {
-                  lat: sw.lat(),
-                  lng: sw.lng()
-                }
-              };
-            });
-          });
-          return scope.$on("$destroy", function() {
-            ngMap.api.event.removeListener(centerListener);
-            return ngMap.api.event.removeListener(boundsListener);
-          });
         }
       };
     };
     MapZoomDirective = function($timeout) {
       return {
         restrict: "ACE",
-        require: ["^ngMap", "?ngModel"],
+        require: "^ngMap",
         scope: {
           zoom: "=value"
         },
-        link: function(scope, element, attrs, ctrls) {
-          var ngMap, ngModel, zoomListener;
-          ngMap = ctrls[0], ngModel = ctrls[1];
-          scope.$watch("zoom", function(zoom) {
+        link: function(scope, element, attrs, ctrl) {
+          return scope.$watch("zoom", function(zoom) {
             if (!zoom) {
               return;
             }
-            return ngMap.map.setZoom(zoom);
+            return ctrl.map.setZoom(zoom);
           });
-          zoomListener = ngMap.map.addListener("zoom_changed", function() {
-            return $timeout(function() {
-              return ngMap.zoom = ngMap.map.getZoom();
-            });
-          });
-          return scope.$on("$destroy", function() {
-            return ngMap.api.event.removeListener(zoomListener);
+        }
+      };
+    };
+    MapFitDirective = function($timeout) {
+      return {
+        restrict: "ACE",
+        require: "^ngMap",
+        scope: {
+          bounds: "=bounds"
+        },
+        link: function(scope, element, attrs, ctrl) {
+          return scope.$watch("bounds", function(bounds) {
+            if (!bounds) {
+              return;
+            }
+            return ctrl.map.fitBounds(bounds);
           });
         }
       };
@@ -377,26 +398,33 @@
     MapMarkerDirective = function($parse) {
       return {
         restrict: "ACE",
-        require: ["^ngMap", "?ngModel"],
+        require: "^ngMap",
         scope: true,
-        link: function(scope, element, attrs, ctrls) {
-          var $marker, contents, createMarker, isCustomLayout, lat, lng, markerNode, ngMap, ngModel, unwatch;
-          ngMap = ctrls[0], ngModel = ctrls[1];
+        link: function(scope, element, attrs, ctrl) {
+          var $marker, centerAnchor, contents, createMarker, getAnchor, isCustomLayout, lat, lng, markerNode, unwatch;
           contents = element.contents();
           markerNode = contents.filter("*");
           isCustomLayout = markerNode.length > 0;
           $marker = {
             scope: scope
           };
+          centerAnchor = "{x: $width / 2, y: $height / 2}";
+          getAnchor = function(w, h) {
+            return (attrs.anchor && $parse(attrs.anchor) || $parse(centerAnchor))(scope, {
+              $width: w,
+              $height: h
+            });
+          };
           createMarker = function() {
             var m;
             m = null;
             if (isCustomLayout > 0) {
               m = new custom.Marker({
-                element: markerNode.first()
+                element: markerNode.first(),
+                anchor: getAnchor
               });
             } else {
-              m = new ngMap.api.Marker();
+              m = new ctrl.api.Marker();
             }
             return m;
           };
@@ -411,10 +439,9 @@
             var isVisible;
             isVisible = !!$marker.marker;
             $marker.marker || ($marker.marker = createMarker());
-            $marker.marker.setPosition(new ngMap.api.LatLng(position.lat, position.lng));
-            $marker.marker.setMap(ngMap.map);
+            $marker.marker.setPosition(new ctrl.api.LatLng(position.lat, position.lng));
+            $marker.marker.setMap(ctrl.map);
             scope.$marker = $marker.marker;
-            ngMap.addMarker($marker);
             if (!isVisible && 'onAdd' in attrs) {
               return $parse(attrs.onAdd)(scope);
             }
@@ -422,7 +449,6 @@
           return scope.$on("$destroy", function() {
             unwatch();
             $marker.marker.setMap(null);
-            ngMap.removeMarker($marker);
             if ('onRemove' in attrs) {
               return $parse(attrs.onRemove)(scope);
             }
@@ -435,11 +461,11 @@
         restrict: "ACE",
         require: "^ngMap",
         transclude: true,
-        link: function(scope, element, attrs, ngMap, transclude) {
+        link: function(scope, element, attrs, ctrl, transclude) {
           var infoWindowList, shouldPan;
           infoWindowList = [];
           shouldPan = $parse(attrs.pan)(scope) || false;
-          return ngMap[attrs.name || "infoWindow"] = function(lat, lng, locals) {
+          return ctrl[attrs.name || "infoWindow"] = function(lat, lng, locals) {
             var $infoWindow;
             if (locals == null) {
               locals = {};
@@ -448,7 +474,7 @@
               scope: angular.extend(scope.$new(), locals)
             };
             $infoWindow.customWindow = new custom.Window({
-              position: new ngMap.api.LatLng(lat, lng),
+              position: new ctrl.api.LatLng(lat, lng),
               content: transclude($infoWindow.scope, angular.noop),
               pan: shouldPan
             });
@@ -456,7 +482,7 @@
               return $infoWindow.customWindow.close();
             });
             $timeout(function() {
-              return $infoWindow.customWindow.open(ngMap.map);
+              return $infoWindow.customWindow.open(ctrl.map);
             });
             return $infoWindow;
           };
@@ -488,16 +514,16 @@
             require: "^ngMap",
             transclude: true,
             scope: true,
-            link: function(scope, element, attrs, ngMap, transclude) {
+            link: function(scope, element, attrs, ctrl, transclude) {
               var controlElement;
               controlElement = angular.element("<div>").append(transclude());
-              return ngMap.map.controls[positions(p, ngMap.api.ControlPosition)].push(controlElement[0]);
+              return ctrl.map.controls[positions(p, ctrl.api.ControlPosition)].push(controlElement[0]);
             }
           };
         }
       ];
     };
-    return module.provider("$ngMaps", [MapsProvider]).directive("ngMap", ["$parse", "$timeout", MapDirective]).directive("ngMapCenter", ["$timeout", MapCenterDirective]).directive("ngMapZoom", ["$timeout", MapZoomDirective]).directive("ngMapMarker", ["$parse", MapMarkerDirective]).directive("ngMapLayer", ["$timeout", "$parse", MapLayerDirective]).directive("ngMapTc", $MapControlDirective('tc')).directive("ngMapTl", $MapControlDirective('tl')).directive("ngMapTr", $MapControlDirective('tr')).directive("ngMapLt", $MapControlDirective('lt')).directive("ngMapRt", $MapControlDirective('rt')).directive("ngMapLc", $MapControlDirective('lc')).directive("ngMapRc", $MapControlDirective('rc')).directive("ngMapLb", $MapControlDirective('lb')).directive("ngMapRb", $MapControlDirective('rb')).directive("ngMapBc", $MapControlDirective('bc')).directive("ngMapBl", $MapControlDirective('bl')).directive("ngMapBr", $MapControlDirective('br'));
+    return module.provider("$ngMaps", [MapsProvider]).directive("ngMap", ["$parse", "$timeout", "$window", MapDirective]).directive("ngMapCenter", ["$timeout", MapCenterDirective]).directive("ngMapZoom", ["$timeout", MapZoomDirective]).directive("ngMapFit", ["$timeout", MapFitDirective]).directive("ngMapMarker", ["$parse", MapMarkerDirective]).directive("ngMapLayer", ["$timeout", "$parse", MapLayerDirective]).directive("ngMapTc", $MapControlDirective('tc')).directive("ngMapTl", $MapControlDirective('tl')).directive("ngMapTr", $MapControlDirective('tr')).directive("ngMapLt", $MapControlDirective('lt')).directive("ngMapRt", $MapControlDirective('rt')).directive("ngMapLc", $MapControlDirective('lc')).directive("ngMapRc", $MapControlDirective('rc')).directive("ngMapLb", $MapControlDirective('lb')).directive("ngMapRb", $MapControlDirective('rb')).directive("ngMapBc", $MapControlDirective('bc')).directive("ngMapBl", $MapControlDirective('bl')).directive("ngMapBr", $MapControlDirective('br'));
   })(window.angular);
 
 }).call(this);

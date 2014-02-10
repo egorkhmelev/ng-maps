@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html ng-app="app">
+<head>
+    <title>Hello world</title>
+
+    <style type="text/css">
+
+        html { height: 100% }
+        body { height: 100%; margin: 0; padding: 0 }
+
+        .ng-map {
+            width: 100%;
+            height: 100%;
+        }
+
+        [class^="ng-map-"],
+        [class*=" ng-map-"] {
+            display: none;
+        }
+
+        .marker {
+            width: 10px;
+            height: 10px;
+            background: red;
+            text-align: center;
+            border-radius: 50%;
+            color: white;
+            cursor: pointer;
+
+            -webkit-transition: box-shadow .2s;
+            box-shadow: 0 0 0 18px rgba(255, 0, 0, 0.25);
+        }
+
+    </style>
+</head>
+<body ng-controller="AppCtrl">
+    <div class="ng-map" event-ready="AppCtrl.ready($ngMap)">
+        <div class="ng-map-fit" bounds="AppCtrl.getBounds($ngMap)"></div>
+
+        <div class="ng-map-marker" ng-repeat="m in AppCtrl.markers" lat="m.lat" lng="m.lng">
+            <div class="marker"></div>
+        </div>
+
+    </div>
+
+    <script type="text/javascript" src="/vendor.js"></script>
+    <script type="text/javascript" src="/angular-maps.js"></script>
+    <script type="text/javascript">
+        angular.module('app', ["ngMaps"])
+            .controller("AppCtrl", function($scope){
+                $scope.AppCtrl = this;
+
+                this.markers = [
+                    {lat: -34.397, lng: 150.644},
+                    {lat: -34.3651062, lng: 150.8656033},
+                    {lat: -34.2791925, lng: 150.6867321},
+                    {lat: -34.4831999, lng: 150.487605}
+                ];
+
+                var bounds;
+                this.getBounds = function(mapCtrl) {
+                    if (!bounds) {
+                        bounds = new mapCtrl.api.LatLngBounds()
+                        for (var i = this.markers.length - 1; i >= 0; i--) {
+                            var m = this.markers[i];
+                            bounds.extend(new mapCtrl.api.LatLng(m.lat, m.lng));
+                        };
+                    }
+                    return bounds;
+                };
+
+                this.ready = function(mapCtrl){
+                    console.log("ready!", mapCtrl);
+                };
+            });
+    </script>
+</body>
+</html>

@@ -34,10 +34,6 @@
             box-shadow: 0 0 0 18px rgba(255, 0, 0, 0.25);
         }
 
-        .corners {
-            font-weight: bold;
-        }
-
     </style>
 </head>
 <body ng-controller="AppCtrl">
@@ -61,7 +57,7 @@
                 // Default map options
                 $ngMapsProvider.options({
                     "styles": [
-                        {"stylers": [{"saturation": -100}, {"lightness": 30}]}
+                        {"stylers": [{"saturation": -100}, {"lightness": 30}, {"gamma": 0.8}]}
                     ]
                 });
             })
