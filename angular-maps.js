@@ -246,9 +246,13 @@
             element.removeClass(loadingClass);
             ctrl.map = new ctrl.api.Map(element[0], options);
             onResize = function() {
-              return ctrl.api.event.trigger(ctrl.map, 'resize');
+              var center;
+              center = new ctrl.api.LatLng(ctrl.center.lat, ctrl.center.lng);
+              ctrl.api.event.trigger(ctrl.map, "resize");
+              return ctrl.map.panTo(center);
             };
             $$window.on("resize", onResize);
+            scope.$on("$ngMap:resize", onResize);
             mapEventListeners = [];
             for (k in attrs) {
               v = attrs[k];

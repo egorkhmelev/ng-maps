@@ -192,9 +192,12 @@
                 ctrl.map = new ctrl.api.Map(element[0], options)
 
                 onResize = ->
-                    ctrl.api.event.trigger(ctrl.map, 'resize')
+                    center = new ctrl.api.LatLng(ctrl.center.lat, ctrl.center.lng)
+                    ctrl.api.event.trigger(ctrl.map, "resize")
+                    ctrl.map.panTo(center)
 
                 $$window.on("resize", onResize)
+                scope.$on("$ngMap:resize", onResize)
 
                 mapEventListeners = []
                 for k, v of attrs
