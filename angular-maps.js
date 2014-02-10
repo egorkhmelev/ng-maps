@@ -258,17 +258,12 @@
               if ((eventName = getEventName(k))) {
                 (function(k, v) {
                   var addListener, listener, saveForRemove;
-                  addListener = ctrl.map.addListener;
+                  addListener = angular.bind(ctrl.map, ctrl.map.addListener);
                   saveForRemove = true;
                   if (eventName === "ready") {
                     saveForRemove = false;
                     eventName = "idle";
-                    addListener = function(name, handler) {
-                      if (handler == null) {
-                        handler = angular.noop;
-                      }
-                      return ctrl.api.event.addListenerOnce(ctrl.map, name, handler);
-                    };
+                    addListener = angular.bind(ctrl.map, ctrl.api.event.addListenerOnce, ctrl.map);
                   }
                   listener = addListener(eventName, function(event) {
                     var locals;

@@ -34,7 +34,7 @@
     </style>
 </head>
 <body ng-controller="AppCtrl">
-    <div class="ng-map" event-ready="AppCtrl.ready($ngMap)">
+    <div class="ng-map" event-ready="AppCtrl.ready($ngMap)" event-click="AppCtrl.click($event)">
         <div class="ng-map-fit" bounds="AppCtrl.getBounds($ngMap)"></div>
 
         <div class="ng-map-marker" ng-repeat="m in AppCtrl.markers" lat="m.lat" lng="m.lng">
@@ -71,6 +71,10 @@
 
                 this.ready = function(mapCtrl){
                     console.log("ready!", mapCtrl);
+                };
+
+                this.click = function(event) {
+                    console.log("click!", event)
                 };
             });
     </script>

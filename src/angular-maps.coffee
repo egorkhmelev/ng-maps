@@ -201,21 +201,21 @@
                     continue unless k.indexOf("event") is 0
                     if (eventName = getEventName(k))
                         do (k, v) ->
-                            addListener = ctrl.map.addListener
+                            addListener = angular.bind(ctrl.map, ctrl.map.addListener)
                             saveForRemove = true
 
                             if eventName is "ready"
                                 saveForRemove = false
                                 eventName = "idle"
-                                addListener = (name, handler = angular.noop) ->
-                                    ctrl.api.event.addListenerOnce(ctrl.map, name, handler)
+                                addListener = angular.bind(ctrl.map, ctrl.api.event.addListenerOnce, ctrl.map)
 
-                            listener = addListener eventName, (event) ->
+                            listener = addListener(eventName, (event) ->
                                 locals = {}
                                 locals["$event"] = event if event
 
                                 $timeout ->
                                     $parse(v)(scope, locals)
+                            )
 
                             mapEventListeners.push(listener) if saveForRemove
 
