@@ -63,11 +63,12 @@
 
         class custom.Window extends api.OverlayView
             constructor: (options) ->
-                @$element = angular.element("<div>").addClass("ng-map-window").append(options.content)
+                @$element = angular.element("<div>").append(options.content)
                 @$element.css(position: "absolute")
 
                 @$position = options.position
                 @$shouldPan = options.pan || false
+                @$$offset = options.offset
 
                 @$events = [ 'mousedown', 'mousemove', 'mouseover', 'mouseout', 'mouseup', 'mousewheel', 'DOMMouseScroll', 'touchstart', 'touchend', 'touchmove', 'dblclick', 'contextmenu', 'click' ]
                 @$preventEvent = (event) ->
@@ -104,12 +105,13 @@
 
                 w = @$element.width()
                 h = @$element.height()
+                offset = angular.extend({x: 0, y: 0}, @$$offset(w, h))
 
                 map = @getMap()
                 position = projection.fromLatLngToDivPixel(@$position)
 
-                position.x = Math.round(position.x - w/2)
-                position.y = Math.round(position.y - h - 30)
+                position.x = Math.round(position.x + offset.x)
+                position.y = Math.round(position.y + offset.y)
 
                 @$element.css(left: position.x, top: position.y)
 
@@ -360,13 +362,22 @@
             infoWindowList = []
             shouldPan = $parse(attrs.pan)(scope) || false
 
+            defaultOffset = "{x: -$width / 2, y: -$height - 30}"
+            getOffset = (w, h) ->
+                (attrs.offset && $parse(attrs.offset) || $parse(defaultOffset))(scope, {$width: w, $height: h})
+
             ctrl[attrs.name || "infoWindow"] = (lat, lng, locals = {}) ->
 
                 $infoWindow = {
                     scope: angular.extend(scope.$new(), locals)
                 }
 
-                $infoWindow.customWindow = new custom.Window(position: new ctrl.api.LatLng(lat, lng), content: transclude($infoWindow.scope, angular.noop), pan: shouldPan)
+                $infoWindow.customWindow = new custom.Window(
+                    position: new ctrl.api.LatLng(lat, lng)
+                    content: transclude($infoWindow.scope, angular.noop)
+                    pan: shouldPan
+                    offset: getOffset
+                )
 
                 $infoWindow.scope.$on "$destroy", ->
                     $infoWindow.customWindow.close()
