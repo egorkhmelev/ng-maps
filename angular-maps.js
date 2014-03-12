@@ -89,12 +89,13 @@
         __extends(Window, _super);
 
         function Window(options) {
-          this.$element = angular.element("<div>").addClass("ng-map-window").append(options.content);
+          this.$element = angular.element("<div>").append(options.content);
           this.$element.css({
             position: "absolute"
           });
           this.$position = options.position;
           this.$shouldPan = options.pan || false;
+          this.$$offset = options.offset;
           this.$events = ['mousedown', 'mousemove', 'mouseover', 'mouseout', 'mouseup', 'mousewheel', 'DOMMouseScroll', 'touchstart', 'touchend', 'touchmove', 'dblclick', 'contextmenu', 'click'];
           this.$preventEvent = function(event) {
             return event.stopPropagation();
@@ -146,17 +147,21 @@
         };
 
         Window.prototype.draw = function() {
-          var bounds, h, map, ne, position, projection, sw, w;
+          var bounds, h, map, ne, offset, position, projection, sw, w;
           projection = this.getProjection();
           if (!this.$position || !projection) {
             return;
           }
           w = this.$element.width();
           h = this.$element.height();
+          offset = angular.extend({
+            x: 0,
+            y: 0
+          }, this.$$offset(w, h));
           map = this.getMap();
           position = projection.fromLatLngToDivPixel(this.$position);
-          position.x = Math.round(position.x - w / 2);
-          position.y = Math.round(position.y - h - 30);
+          position.x = Math.round(position.x + offset.x);
+          position.y = Math.round(position.y + offset.y);
           this.$element.css({
             left: position.x,
             top: position.y
@@ -461,9 +466,16 @@
         require: "^ngMap",
         transclude: true,
         link: function(scope, element, attrs, ctrl, transclude) {
-          var infoWindowList, shouldPan;
+          var defaultOffset, getOffset, infoWindowList, shouldPan;
           infoWindowList = [];
           shouldPan = $parse(attrs.pan)(scope) || false;
+          defaultOffset = "{x: -$width / 2, y: -$height - 30}";
+          getOffset = function(w, h) {
+            return (attrs.offset && $parse(attrs.offset) || $parse(defaultOffset))(scope, {
+              $width: w,
+              $height: h
+            });
+          };
           return ctrl[attrs.name || "infoWindow"] = function(lat, lng, locals) {
             var $infoWindow;
             if (locals == null) {
@@ -475,7 +487,8 @@
             $infoWindow.customWindow = new custom.Window({
               position: new ctrl.api.LatLng(lat, lng),
               content: transclude($infoWindow.scope, angular.noop),
-              pan: shouldPan
+              pan: shouldPan,
+              offset: getOffset
             });
             $infoWindow.scope.$on("$destroy", function() {
               return $infoWindow.customWindow.close();
