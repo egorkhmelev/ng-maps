@@ -3,7 +3,7 @@
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
   (function(angular) {
-    var $MapControlDirective, $document, $maps, $q, $window, MapCenterDirective, MapController, MapDirective, MapFitDirective, MapLayerDirective, MapMarkerDirective, MapZoomDirective, MapsProvider, apiKey, custom, defaultOptions, deferred, extra, module, ng, scriptId, src;
+    var $MapControlDirective, $document, $maps, $q, $window, MapCenterDirective, MapController, MapDirective, MapFitDirective, MapLayerDirective, MapMarkerDirective, MapPolylineDirective, MapZoomDirective, MapsProvider, apiKey, custom, defaultOptions, deferred, extra, getEventName, module, ng, scriptId, src;
     module = angular.module("ngMaps", []);
     ng = angular.injector(["ng"]);
     $document = ng.get("$document");
@@ -16,6 +16,14 @@
     extra = [];
     defaultOptions = {};
     custom = {};
+    getEventName = function(s) {
+      var nameArray;
+      nameArray = s.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase().split("-");
+      nameArray.shift();
+      if (nameArray.length) {
+        return nameArray.join("_");
+      }
+    };
     $window.ngMapsAsync = function() {
       var api;
       api = $window.google.maps;
@@ -23,6 +31,8 @@
         __extends(Marker, _super);
 
         function Marker(options) {
+          var e, self, _i, _len, _ref;
+          self = this;
           this.$element = options.element;
           this.$element.css({
             position: "absolute"
@@ -33,19 +43,25 @@
           this.$preventEvent = function(event) {
             return event.stopPropagation();
           };
-        }
-
-        Marker.prototype.onAdd = function() {
-          var e, panes, _i, _len, _ref, _results;
-          panes = this.getPanes();
-          panes.overlayImage.appendChild(this.$element[0]);
           _ref = this.$events;
-          _results = [];
           for (_i = 0, _len = _ref.length; _i < _len; _i++) {
             e = _ref[_i];
-            _results.push(this.$element.on(e, this.$preventEvent));
+            this.$element.on(e, this.$preventEvent);
           }
-          return _results;
+        }
+
+        Marker.prototype.setMap = function(map) {
+          if (this.getMap() === map) {
+            return;
+          }
+          return Marker.__super__.setMap.call(this, map);
+        };
+
+        Marker.prototype.onAdd = function() {
+          var panes;
+          panes = this.getPanes();
+          panes.overlayImage.appendChild(this.$element[0]);
+          return this.$element.hide();
         };
 
         Marker.prototype.onRemove = function() {
@@ -61,25 +77,98 @@
           return this.$position;
         };
 
+        Marker.prototype.getAnchor = function() {
+          var h, w;
+          w = this.$element.outerWidth();
+          h = this.$element.outerHeight();
+          return angular.extend({
+            x: 0,
+            y: 0
+          }, this.$$anchor(w, h));
+        };
+
+        Marker.prototype.setDraggable = function(draggable) {
+          if (draggable) {
+            return this.$element.on("mousedown", angular.bind(this, this._startDrag));
+          } else {
+            return this.$element.off("mousedown", this._startDrag);
+          }
+        };
+
         Marker.prototype.draw = function() {
-          var anchor, h, position, projection, w;
+          var anchor, position, projection;
           projection = this.getProjection();
           if (!this.$position || !projection) {
             return;
           }
-          w = this.$element.outerWidth();
-          h = this.$element.outerHeight();
-          anchor = angular.extend({
-            x: 0,
-            y: 0
-          }, this.$$anchor(w, h));
+          anchor = this.getAnchor();
           position = projection.fromLatLngToDivPixel(this.$position);
           position.x = Math.round(position.x - anchor.x);
           position.y = Math.round(position.y - anchor.y);
+          if (!(position.x && position.y)) {
+            return;
+          }
           return this.$element.css({
             left: position.x,
             top: position.y
-          });
+          }).show();
+        };
+
+        Marker.prototype._startDrag = function(event) {
+          var dragData, endDrag, startDrag;
+          event.preventDefault();
+          console.log("start!!");
+          dragData = {
+            origin: event,
+            originPosition: this.$element.position(),
+            anchor: this.getAnchor(),
+            projection: this.getProjection(),
+            listeners: []
+          };
+          startDrag = angular.bind(this, this._drag, dragData);
+          endDrag = angular.bind(this, this._endDrag, dragData);
+          if (this.$element[0].setCapture) {
+            this.$element[0].setCapture(true);
+            dragData.listeners.push(api.event.addDomListener(this.$element[0], "mousemove", startDrag));
+            return dragData.listeners.push(api.event.addDomListener(this.$element[0], "mouseup", endDrag));
+          } else {
+            dragData.listeners.push(api.event.addDomListener($window, "mousemove", startDrag));
+            return dragData.listeners.push(api.event.addDomListener($window, "mouseup", endDrag));
+          }
+        };
+
+        Marker.prototype._drag = function(data, event) {
+          var dragEvent, dx, dy, point, position;
+          event.preventDefault();
+          dx = event.clientX - data.origin.clientX;
+          dy = event.clientY - data.origin.clientY;
+          point = new api.Point(data.originPosition.left + dx + data.anchor.x, data.originPosition.top + dy + data.anchor.y);
+          position = data.projection.fromDivPixelToLatLng(point);
+          dragEvent = {
+            originalEvent: event,
+            position: position,
+            defaultPrevented: false,
+            preventDefault: function() {
+              return this.defaultPrevented = true;
+            }
+          };
+          api.event.trigger(this, "drag", dragEvent);
+          if (dragEvent.defaultPrevented) {
+            return;
+          }
+          return this.setPosition(position);
+        };
+
+        Marker.prototype._endDrag = function(data, event) {
+          var l, _i, _len, _ref;
+          _ref = data.listeners;
+          for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+            l = _ref[_i];
+            api.event.removeListener(l);
+          }
+          if (this.$element[0].releaseCapture) {
+            return this.$element[0].releaseCapture();
+          }
         };
 
         return Marker;
@@ -230,19 +319,11 @@
         scope: true,
         transclude: true,
         link: function(scope, element, attrs, ctrl, transclude) {
-          var $$window, getEventName, loadingClass, view;
+          var $$window, loadingClass, view;
           $$window = angular.element($window);
           view = angular.element("<div>").hide();
           loadingClass = 'ng-map-loading';
           element.addClass(loadingClass);
-          getEventName = function(s) {
-            var nameArray;
-            nameArray = s.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase().split("-");
-            nameArray.shift();
-            if (nameArray.length) {
-              return nameArray.join("_");
-            }
-          };
           return $maps().then(function(gmaps) {
             var boundsListener, centerListener, eventName, k, mapEventListeners, onResize, options, v, zoomListener;
             ctrl.api = gmaps;
@@ -405,13 +486,10 @@
         require: "^ngMap",
         scope: true,
         link: function(scope, element, attrs, ctrl) {
-          var $marker, centerAnchor, contents, createMarker, getAnchor, isCustomLayout, lat, lng, markerNode, unwatch;
+          var $marker, centerAnchor, contents, createMarker, draggable, getAnchor, isCustomLayout, lat, lng, markerNode, once, unwatch, unwatchDraggable;
           contents = element.contents();
           markerNode = contents.filter("*");
           isCustomLayout = markerNode.length > 0;
-          $marker = {
-            scope: scope
-          };
           centerAnchor = "{x: $width / 2, y: $height / 2}";
           getAnchor = function(w, h) {
             return (attrs.anchor && $parse(attrs.anchor) || $parse(centerAnchor))(scope, {
@@ -420,38 +498,70 @@
             });
           };
           createMarker = function() {
-            var m;
+            var eventName, k, m, markerEventListeners, v;
             m = null;
             if (isCustomLayout > 0) {
               m = new custom.Marker({
                 element: markerNode.first(),
                 anchor: getAnchor
               });
+              markerEventListeners = [];
+              for (k in attrs) {
+                v = attrs[k];
+                if (k.indexOf("event") !== 0) {
+                  continue;
+                }
+                if ((eventName = getEventName(k))) {
+                  (function(k, v) {
+                    var listener;
+                    listener = ctrl.api.event.addListener(m, eventName, function(event) {
+                      var locals;
+                      locals = {};
+                      if (event) {
+                        locals["$event"] = event;
+                      }
+                      locals["$marker"] = m;
+                      return $parse(v)(scope, locals);
+                    });
+                    return markerEventListeners.push(listener);
+                  })(k, v);
+                }
+              }
             } else {
               m = new ctrl.api.Marker();
             }
             return m;
           };
+          $marker = {
+            scope: scope,
+            marker: createMarker()
+          };
+          scope.$marker = $marker.marker;
           lat = $parse(attrs.lat);
           lng = $parse(attrs.lng);
+          draggable = $parse(attrs.draggable);
+          once = true;
           unwatch = scope.$watch(function() {
             return {
               lat: lat(scope),
               lng: lng(scope)
             };
           }, function(position) {
-            var isVisible;
-            isVisible = !!$marker.marker;
-            $marker.marker || ($marker.marker = createMarker());
             $marker.marker.setPosition(new ctrl.api.LatLng(position.lat, position.lng));
             $marker.marker.setMap(ctrl.map);
-            scope.$marker = $marker.marker;
-            if (!isVisible && 'onAdd' in attrs) {
-              return $parse(attrs.onAdd)(scope);
+            if (once && 'onAdd' in attrs) {
+              $parse(attrs.onAdd)(scope);
             }
+            return once = false;
           }, true);
+          unwatchDraggable = scope.$watch(function() {
+            return draggable(scope);
+          }, function(draggable) {
+            return $marker.marker.setDraggable(draggable);
+          });
           return scope.$on("$destroy", function() {
             unwatch();
+            unwatchDraggable();
             $marker.marker.setMap(null);
             if ('onRemove' in attrs) {
               return $parse(attrs.onRemove)(scope);
@@ -501,6 +611,48 @@
         }
       };
     };
+    MapPolylineDirective = function($parse) {
+      return {
+        restrict: "ACE",
+        require: "^ngMap",
+        scope: {
+          path: "=path",
+          color: "=color",
+          opacity: "=opacity",
+          weight: "=weight"
+        },
+        link: function(scope, element, attrs, ctrl) {
+          var poly;
+          console.log("polyline!", scope.path);
+          poly = new ctrl.api.Polyline();
+          poly.setMap(ctrl.map);
+          scope.$watch("path", function(pathSrc) {
+            var p, path, _i, _len;
+            if (pathSrc == null) {
+              pathSrc = [];
+            }
+            path = [];
+            for (_i = 0, _len = pathSrc.length; _i < _len; _i++) {
+              p = pathSrc[_i];
+              path.push(new ctrl.api.LatLng(p[0], p[1]));
+            }
+            return poly.setPath(path);
+          }, true);
+          scope.$watch(function() {
+            return {
+              strokeColor: scope.color || '#FF0000',
+              strokeOpacity: scope.opacity || 1.0,
+              strokeWeight: scope.weight || 1.0
+            };
+          }, function(options) {
+            return poly.setOptions(options);
+          }, true);
+          return scope.$on("$destroy", function() {
+            return poly.setMap(null);
+          });
+        }
+      };
+    };
     $MapControlDirective = function(p) {
       var positions;
       positions = function(p, api) {
@@ -535,7 +687,7 @@
         }
       ];
     };
-    return module.provider("$ngMaps", [MapsProvider]).directive("ngMap", ["$parse", "$timeout", "$window", MapDirective]).directive("ngMapCenter", ["$timeout", MapCenterDirective]).directive("ngMapZoom", ["$timeout", MapZoomDirective]).directive("ngMapFit", ["$timeout", MapFitDirective]).directive("ngMapMarker", ["$parse", MapMarkerDirective]).directive("ngMapLayer", ["$timeout", "$parse", MapLayerDirective]).directive("ngMapTc", $MapControlDirective('tc')).directive("ngMapTl", $MapControlDirective('tl')).directive("ngMapTr", $MapControlDirective('tr')).directive("ngMapLt", $MapControlDirective('lt')).directive("ngMapRt", $MapControlDirective('rt')).directive("ngMapLc", $MapControlDirective('lc')).directive("ngMapRc", $MapControlDirective('rc')).directive("ngMapLb", $MapControlDirective('lb')).directive("ngMapRb", $MapControlDirective('rb')).directive("ngMapBc", $MapControlDirective('bc')).directive("ngMapBl", $MapControlDirective('bl')).directive("ngMapBr", $MapControlDirective('br'));
+    return module.provider("$ngMaps", [MapsProvider]).directive("ngMap", ["$parse", "$timeout", "$window", MapDirective]).directive("ngMapCenter", ["$timeout", MapCenterDirective]).directive("ngMapZoom", ["$timeout", MapZoomDirective]).directive("ngMapFit", ["$timeout", MapFitDirective]).directive("ngMapMarker", ["$parse", MapMarkerDirective]).directive("ngMapLayer", ["$timeout", "$parse", MapLayerDirective]).directive("ngMapPolyline", [MapPolylineDirective]).directive("ngMapTc", $MapControlDirective('tc')).directive("ngMapTl", $MapControlDirective('tl')).directive("ngMapTr", $MapControlDirective('tr')).directive("ngMapLt", $MapControlDirective('lt')).directive("ngMapRt", $MapControlDirective('rt')).directive("ngMapLc", $MapControlDirective('lc')).directive("ngMapRc", $MapControlDirective('rc')).directive("ngMapLb", $MapControlDirective('lb')).directive("ngMapRb", $MapControlDirective('rb')).directive("ngMapBc", $MapControlDirective('bc')).directive("ngMapBl", $MapControlDirective('bl')).directive("ngMapBr", $MapControlDirective('br'));
   })(window.angular);
 
 }).call(this);
