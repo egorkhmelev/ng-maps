@@ -17,11 +17,19 @@
 
     custom = {}
 
+    getEventName = (s) ->
+        nameArray = s.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase().split("-")
+        nameArray.shift()
+        if nameArray.length
+            return nameArray.join("_")
+
     $window.ngMapsAsync = ->
         api = $window.google.maps
 
         class custom.Marker extends api.OverlayView
             constructor: (options) ->
+                self = this
+
                 @$element = options.element
                 @$element.css(position: "absolute")
 
@@ -32,10 +40,17 @@
                 @$preventEvent = (event) ->
                     event.stopPropagation()
 
+                for e in @$events
+                    @$element.on(e, @$preventEvent)
+
+            setMap: (map) ->
+                return if @getMap() is map
+                super(map)
+
             onAdd: ->
                 panes = @getPanes()
                 panes.overlayImage.appendChild(@$element[0])
-                @$element.on e, @$preventEvent for e in @$events
+                @$element.hide()
 
             onRemove: ->
                 @$element.remove()
@@ -47,19 +62,84 @@
             getPosition: ->
                 @$position
 
+            getAnchor: ->
+                w = @$element.outerWidth()
+                h = @$element.outerHeight()
+                return angular.extend({x: 0, y: 0}, @$$anchor(w, h))
+
+            setDraggable: (draggable) ->
+                if draggable
+                    @$element.on("mousedown", angular.bind(this, @_startDrag))
+                else
+                    @$element.off("mousedown", @_startDrag)
+
+
             draw: ->
                 projection = @getProjection()
                 return if !@$position || !projection
 
-                w = @$element.outerWidth()
-                h = @$element.outerHeight()
-                anchor = angular.extend({x: 0, y: 0}, @$$anchor(w, h))
+                anchor = @getAnchor()
 
                 position = projection.fromLatLngToDivPixel(@$position)
                 position.x = Math.round(position.x - anchor.x)
                 position.y = Math.round(position.y - anchor.y)
 
-                @$element.css(left: position.x, top: position.y)
+                return unless position.x && position.y
+                @$element.css(left: position.x, top: position.y).show()
+
+            _startDrag: (event) ->
+                event.preventDefault()
+                console.log "start!!"
+
+                dragData = {
+                    origin: event
+                    originPosition: @$element.position()
+                    anchor: @getAnchor()
+                    projection: @getProjection()
+                    listeners: []
+                }
+
+                startDrag = angular.bind(this, @_drag, dragData)
+                endDrag = angular.bind(this, @_endDrag, dragData)
+
+                if @$element[0].setCapture
+                    @$element[0].setCapture(true)
+                    dragData.listeners.push api.event.addDomListener(@$element[0], "mousemove", startDrag)
+                    dragData.listeners.push api.event.addDomListener(@$element[0], "mouseup", endDrag)
+                else
+                    dragData.listeners.push api.event.addDomListener($window, "mousemove", startDrag)
+                    dragData.listeners.push api.event.addDomListener($window, "mouseup", endDrag)
+
+            _drag: (data, event) ->
+                event.preventDefault()
+
+                dx = event.clientX - data.origin.clientX
+                dy = event.clientY - data.origin.clientY
+
+                point = new api.Point(
+                    data.originPosition.left + dx + data.anchor.x,
+                    data.originPosition.top + dy + data.anchor.y
+                )
+
+                position = data.projection.fromDivPixelToLatLng(point)
+
+                dragEvent = {
+                    originalEvent: event
+                    position: position
+                    defaultPrevented: false
+                    preventDefault: ->
+                        @defaultPrevented = true
+                }
+
+                api.event.trigger(this, "drag", dragEvent)
+
+                return if dragEvent.defaultPrevented
+                @setPosition(position)
+
+            _endDrag: (data, event) ->
+                api.event.removeListener(l) for l in data.listeners
+                @$element[0].releaseCapture() if @$element[0].releaseCapture
+
 
         class custom.Window extends api.OverlayView
             constructor: (options) ->
@@ -165,7 +245,6 @@
 
         return
 
-
     MapDirective = ($parse, $timeout, $window) ->
         restrict: "ACE"
         controller: ["$scope", "$timeout", MapController]
@@ -177,12 +256,6 @@
             view = angular.element("<div>").hide()
             loadingClass = 'ng-map-loading'
             element.addClass(loadingClass)
-
-            getEventName = (s) ->
-                nameArray = s.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase().split("-")
-                nameArray.shift()
-                if nameArray.length
-                    return nameArray.join("_")
 
             $maps().then (gmaps) ->
                 ctrl.api = gmaps
@@ -313,10 +386,6 @@
             markerNode = contents.filter("*")
             isCustomLayout =  markerNode.length > 0
 
-            $marker = {
-                scope: scope
-            }
-
             centerAnchor = "{x: $width / 2, y: $height / 2}"
             getAnchor = (w, h) ->
                 (attrs.anchor && $parse(attrs.anchor) || $parse(centerAnchor))(scope, {$width: w, $height: h})
@@ -327,29 +396,57 @@
                 if isCustomLayout > 0 # Custom marker layout
                     m = new custom.Marker(element: markerNode.first(), anchor: getAnchor)
 
+                    markerEventListeners = []
+                    for k, v of attrs
+                        continue unless k.indexOf("event") is 0
+                        if (eventName = getEventName(k))
+                            do (k, v) ->
+                                listener = ctrl.api.event.addListener(m, eventName, (event) ->
+                                    locals = {}
+                                    locals["$event"] = event if event
+                                    locals["$marker"] = m
+
+                                    $parse(v)(scope, locals)
+                                )
+
+                                markerEventListeners.push(listener)
+
                 else # Default layout
                     m = new ctrl.api.Marker()
 
                 return m
 
+            $marker = {
+                scope: scope
+                marker: createMarker()
+            }
+
+            scope.$marker = $marker.marker
+
             lat = $parse(attrs.lat)
             lng = $parse(attrs.lng)
+            draggable = $parse(attrs.draggable)
 
+            once = true
             unwatch = scope.$watch ->
                 lat: lat(scope)
                 lng: lng(scope)
             , (position) ->
-                isVisible = !!$marker.marker
-                $marker.marker ||= createMarker()
                 $marker.marker.setPosition(new ctrl.api.LatLng(position.lat, position.lng))
                 $marker.marker.setMap(ctrl.map)
 
-                scope.$marker = $marker.marker
-                $parse(attrs.onAdd)(scope) if !isVisible && 'onAdd' of attrs
+                $parse(attrs.onAdd)(scope) if once && 'onAdd' of attrs
+                once = false
             , true
+
+            unwatchDraggable = scope.$watch ->
+                draggable(scope)
+            , (draggable) ->
+                $marker.marker.setDraggable(draggable)
 
             scope.$on "$destroy", ->
                 unwatch()
+                unwatchDraggable()
                 $marker.marker.setMap(null)
                 $parse(attrs.onRemove)(scope) if 'onRemove' of attrs
 
@@ -386,6 +483,39 @@
                     $infoWindow.customWindow.open(ctrl.map)
 
                 return $infoWindow
+
+    MapPolylineDirective = ($parse) ->
+        restrict: "ACE"
+        require: "^ngMap"
+        scope:
+            path: "=path"
+            color: "=color"
+            opacity: "=opacity"
+            weight: "=weight"
+        link: (scope, element, attrs, ctrl) ->
+            console.log "polyline!", scope.path
+
+            poly = new ctrl.api.Polyline()
+            poly.setMap(ctrl.map)
+
+            scope.$watch "path", (pathSrc = []) ->
+                path = []
+                for p in pathSrc
+                    path.push new ctrl.api.LatLng(p[0], p[1])
+                poly.setPath(path)
+            , true
+
+            scope.$watch ->
+                strokeColor: scope.color || '#FF0000'
+                strokeOpacity: scope.opacity || 1.0
+                strokeWeight: scope.weight || 1.0
+            , (options) ->
+                poly.setOptions(options)
+            , true
+
+            scope.$on "$destroy", ->
+                poly.setMap(null)
+
 
     $MapControlDirective = (p) ->
         positions = (p, api) ->
@@ -424,6 +554,8 @@
 
         .directive("ngMapMarker", ["$parse", MapMarkerDirective])
         .directive("ngMapLayer", ["$timeout", "$parse", MapLayerDirective])
+
+        .directive("ngMapPolyline", [MapPolylineDirective])
 
         .directive("ngMapTc", $MapControlDirective('tc'))
         .directive("ngMapTl", $MapControlDirective('tl'))
