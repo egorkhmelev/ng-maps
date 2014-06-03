@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html ng-app="app">
+<head>
+    <title>Hello world</title>
+
+    <style type="text/css">
+
+        html { height: 100% }
+        body { height: 100%; margin: 0; padding: 0 }
+
+        .ng-map {
+            width: 100%;
+            height: 100%;
+        }
+
+        [class^="ng-map-"],
+        [class*=" ng-map-"] {
+            display: none;
+        }
+
+        .marker {
+            width: 16px;
+            height: 16px;
+            background: #3F7FEF;
+            text-align: center;
+            border-radius: 50%;
+            cursor: move;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+
+            -webkit-transition: box-shadow .2s;
+        }
+
+    </style>
+</head>
+<body ng-controller="AppCtrl">
+    <div class="ng-map" options="{scaleControl: true}" event-ready="AppCtrl.ready($ngMap)">
+        <div class="ng-map-center" lat="54.60786894786166" lng="38.16925048828125"></div>
+        <div class="ng-map-zoom" value="13"></div>
+
+        <div class="ng-map-marker" lat="AppCtrl.markerPosition.lat()" lng="AppCtrl.markerPosition.lng()" draggable="true" event-drag="AppCtrl.onDrag($event, $ngMap)" event-dragstart="AppCtrl.onDragStart($event, $ngMap)" event-dragend="AppCtrl.onDragEnd($event, $ngMap)">
+            <div class="marker"></div>
+        </div>
+    </div>
+
+    <script type="text/javascript" src="/vendor.js"></script>
+    <script type="text/javascript" src="/angular-maps.js"></script>
+    <script type="text/javascript">
+
+        angular.module('app', ["ngMaps"])
+
+            .controller("AppCtrl", function($scope, $timeout){
+                $scope.AppCtrl = this;
+                self = this
+
+                this.onDragStart = function($event, ctrl) {
+                    console.log("drag start", $event.position.lat(), $event.position.lng());
+                };
+
+                this.onDrag = function($event, ctrl) {
+                    console.log("drag", $event.position.lat(), $event.position.lng());
+                };
+
+                this.onDragEnd = function($event, ctrl) {
+                    console.log("drag end", $event.position.lat(), $event.position.lng());
+                };
+
+                this.ready = function(ctrl){
+                    self.markerPosition = new ctrl.api.LatLng(54.63775,38.16715)
+                };
+
+            });
+    </script>
+</body>
+</html>

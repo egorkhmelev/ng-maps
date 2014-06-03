@@ -115,9 +115,11 @@
         };
 
         Marker.prototype._startDrag = function(event) {
-          var dragData, endDrag, startDrag;
+          var dragData, endDrag, startDrag, dragEvent;
           event.preventDefault();
-          console.log("start!!");
+
+          api.event.trigger(this, "dragstart", { originalEvent: event });
+
           dragData = {
             origin: event,
             originPosition: this.$element.position(),
@@ -169,6 +171,7 @@
           if (this.$element[0].releaseCapture) {
             return this.$element[0].releaseCapture();
           }
+          api.event.trigger(this, "dragend", { originalEvent: event });
         };
 
         return Marker;

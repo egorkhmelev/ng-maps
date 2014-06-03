@@ -87,15 +87,42 @@
                 return unless position.x && position.y
                 @$element.css(left: position.x, top: position.y).show()
 
+            _getPoint: ->
+                position = @$element.position()
+                return new api.Point(
+                    position.left,
+                    position.top
+                )
+
+            _getEvent: (event, point) ->
+                anchor = @getAnchor()
+                projection = @getProjection()
+
+                anchoredPoint = new api.Point(
+                    point.x + anchor.x,
+                    point.y + anchor.y
+                )
+
+                latLng = projection.fromDivPixelToLatLng(anchoredPoint)
+
+                return {
+                    originalEvent: event
+                    position: latLng
+                    defaultPrevented: false
+                    preventDefault: ->
+                        @defaultPrevented = true
+                }
+
+
             _startDrag: (event) ->
                 event.preventDefault()
-                console.log "start!!"
+
+                api.event.trigger(this, "dragstart", dragStartEvent = @_getEvent(event, @_getPoint()))
+                return if dragStartEvent.defaultPrevented
 
                 dragData = {
                     origin: event
-                    originPosition: @$element.position()
-                    anchor: @getAnchor()
-                    projection: @getProjection()
+                    originPoint: @_getPoint()
                     listeners: []
                 }
 
@@ -117,26 +144,20 @@
                 dy = event.clientY - data.origin.clientY
 
                 point = new api.Point(
-                    data.originPosition.left + dx + data.anchor.x,
-                    data.originPosition.top + dy + data.anchor.y
+                    data.originPoint.x + dx,
+                    data.originPoint.y + dy
                 )
 
-                position = data.projection.fromDivPixelToLatLng(point)
-
-                dragEvent = {
-                    originalEvent: event
-                    position: position
-                    defaultPrevented: false
-                    preventDefault: ->
-                        @defaultPrevented = true
-                }
+                dragEvent = @_getEvent(event, point)
+                position = dragEvent.position
 
                 api.event.trigger(this, "drag", dragEvent)
-
                 return if dragEvent.defaultPrevented
+
                 @setPosition(position)
 
             _endDrag: (data, event) ->
+                api.event.trigger(this, "dragend", dragEndEvent = @_getEvent(event, @_getPoint()))
                 api.event.removeListener(l) for l in data.listeners
                 @$element[0].releaseCapture() if @$element[0].releaseCapture
 
@@ -493,7 +514,6 @@
             opacity: "=opacity"
             weight: "=weight"
         link: (scope, element, attrs, ctrl) ->
-            console.log "polyline!", scope.path
 
             poly = new ctrl.api.Polyline()
             poly.setMap(ctrl.map)
