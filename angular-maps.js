@@ -114,17 +114,38 @@
           }).show();
         };
 
+        Marker.prototype._getPoint = function() {
+          var position;
+          position = this.$element.position();
+          return new api.Point(position.left, position.top);
+        };
+
+        Marker.prototype._getEvent = function(event, point) {
+          var anchor, anchoredPoint, latLng, projection;
+          anchor = this.getAnchor();
+          projection = this.getProjection();
+          anchoredPoint = new api.Point(point.x + anchor.x, point.y + anchor.y);
+          latLng = projection.fromDivPixelToLatLng(anchoredPoint);
+          return {
+            originalEvent: event,
+            position: latLng,
+            defaultPrevented: false,
+            preventDefault: function() {
+              return this.defaultPrevented = true;
+            }
+          };
+        };
+
         Marker.prototype._startDrag = function(event) {
-          var dragData, endDrag, startDrag, dragEvent;
+          var dragData, dragStartEvent, endDrag, startDrag;
           event.preventDefault();
-
-          api.event.trigger(this, "dragstart", { originalEvent: event });
-
+          api.event.trigger(this, "dragstart", dragStartEvent = this._getEvent(event, this._getPoint()));
+          if (dragStartEvent.defaultPrevented) {
+            return;
+          }
           dragData = {
             origin: event,
-            originPosition: this.$element.position(),
-            anchor: this.getAnchor(),
-            projection: this.getProjection(),
+            originPoint: this._getPoint(),
             listeners: []
           };
           startDrag = angular.bind(this, this._drag, dragData);
@@ -144,16 +165,9 @@
           event.preventDefault();
           dx = event.clientX - data.origin.clientX;
           dy = event.clientY - data.origin.clientY;
-          point = new api.Point(data.originPosition.left + dx + data.anchor.x, data.originPosition.top + dy + data.anchor.y);
-          position = data.projection.fromDivPixelToLatLng(point);
-          dragEvent = {
-            originalEvent: event,
-            position: position,
-            defaultPrevented: false,
-            preventDefault: function() {
-              return this.defaultPrevented = true;
-            }
-          };
+          point = new api.Point(data.originPoint.x + dx, data.originPoint.y + dy);
+          dragEvent = this._getEvent(event, point);
+          position = dragEvent.position;
           api.event.trigger(this, "drag", dragEvent);
           if (dragEvent.defaultPrevented) {
             return;
@@ -162,7 +176,8 @@
         };
 
         Marker.prototype._endDrag = function(data, event) {
-          var l, _i, _len, _ref;
+          var dragEndEvent, l, _i, _len, _ref;
+          api.event.trigger(this, "dragend", dragEndEvent = this._getEvent(event, this._getPoint()));
           _ref = data.listeners;
           for (_i = 0, _len = _ref.length; _i < _len; _i++) {
             l = _ref[_i];
@@ -171,7 +186,6 @@
           if (this.$element[0].releaseCapture) {
             return this.$element[0].releaseCapture();
           }
-          api.event.trigger(this, "dragend", { originalEvent: event });
         };
 
         return Marker;
@@ -626,7 +640,6 @@
         },
         link: function(scope, element, attrs, ctrl) {
           var poly;
-          console.log("polyline!", scope.path);
           poly = new ctrl.api.Polyline();
           poly.setMap(ctrl.map);
           scope.$watch("path", function(pathSrc) {
