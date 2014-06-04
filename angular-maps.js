@@ -497,7 +497,7 @@
         }
       };
     };
-    MapMarkerDirective = function($parse) {
+    MapMarkerDirective = function($parse, $timeout) {
       return {
         restrict: "ACE",
         require: "^ngMap",
@@ -544,6 +544,16 @@
                   })(k, v);
                 }
               }
+              markerEventListeners.push(ctrl.api.event.addListener(m, "dragstart", function(event) {
+                return $timeout(function() {
+                  return scope.$dragging = true;
+                });
+              }));
+              markerEventListeners.push(ctrl.api.event.addListener(m, "dragend", function(event) {
+                return $timeout(function() {
+                  return scope.$dragging = false;
+                });
+              }));
             } else {
               m = new ctrl.api.Marker();
             }
@@ -703,7 +713,7 @@
         }
       ];
     };
-    return module.provider("$ngMaps", [MapsProvider]).directive("ngMap", ["$parse", "$timeout", "$window", MapDirective]).directive("ngMapCenter", ["$timeout", MapCenterDirective]).directive("ngMapZoom", ["$timeout", MapZoomDirective]).directive("ngMapFit", ["$timeout", MapFitDirective]).directive("ngMapMarker", ["$parse", MapMarkerDirective]).directive("ngMapLayer", ["$timeout", "$parse", MapLayerDirective]).directive("ngMapPolyline", [MapPolylineDirective]).directive("ngMapTc", $MapControlDirective('tc')).directive("ngMapTl", $MapControlDirective('tl')).directive("ngMapTr", $MapControlDirective('tr')).directive("ngMapLt", $MapControlDirective('lt')).directive("ngMapRt", $MapControlDirective('rt')).directive("ngMapLc", $MapControlDirective('lc')).directive("ngMapRc", $MapControlDirective('rc')).directive("ngMapLb", $MapControlDirective('lb')).directive("ngMapRb", $MapControlDirective('rb')).directive("ngMapBc", $MapControlDirective('bc')).directive("ngMapBl", $MapControlDirective('bl')).directive("ngMapBr", $MapControlDirective('br'));
+    return module.provider("$ngMaps", [MapsProvider]).directive("ngMap", ["$parse", "$timeout", "$window", MapDirective]).directive("ngMapCenter", ["$timeout", MapCenterDirective]).directive("ngMapZoom", ["$timeout", MapZoomDirective]).directive("ngMapFit", ["$timeout", MapFitDirective]).directive("ngMapMarker", ["$parse", "$timeout", MapMarkerDirective]).directive("ngMapLayer", ["$timeout", "$parse", MapLayerDirective]).directive("ngMapPolyline", [MapPolylineDirective]).directive("ngMapTc", $MapControlDirective('tc')).directive("ngMapTl", $MapControlDirective('tl')).directive("ngMapTr", $MapControlDirective('tr')).directive("ngMapLt", $MapControlDirective('lt')).directive("ngMapRt", $MapControlDirective('rt')).directive("ngMapLc", $MapControlDirective('lc')).directive("ngMapRc", $MapControlDirective('rc')).directive("ngMapLb", $MapControlDirective('lb')).directive("ngMapRb", $MapControlDirective('rb')).directive("ngMapBc", $MapControlDirective('bc')).directive("ngMapBl", $MapControlDirective('bl')).directive("ngMapBr", $MapControlDirective('br'));
   })(window.angular);
 
 }).call(this);
