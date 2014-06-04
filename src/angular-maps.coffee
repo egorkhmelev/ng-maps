@@ -398,7 +398,7 @@
                 ctrl.map.fitBounds(bounds)
             )
 
-    MapMarkerDirective = ($parse) ->
+    MapMarkerDirective = ($parse, $timeout) ->
         restrict: "ACE"
         require: "^ngMap"
         scope: true
@@ -431,6 +431,14 @@
                                 )
 
                                 markerEventListeners.push(listener)
+
+                    markerEventListeners.push ctrl.api.event.addListener(m, "dragstart", (event) ->
+                        $timeout -> scope.$dragging = true
+                    )
+
+                    markerEventListeners.push ctrl.api.event.addListener(m, "dragend", (event) ->
+                        $timeout -> scope.$dragging = false
+                    )
 
                 else # Default layout
                     m = new ctrl.api.Marker()
@@ -572,7 +580,7 @@
         .directive("ngMapZoom", ["$timeout", MapZoomDirective])
         .directive("ngMapFit", ["$timeout", MapFitDirective])
 
-        .directive("ngMapMarker", ["$parse", MapMarkerDirective])
+        .directive("ngMapMarker", ["$parse", "$timeout", MapMarkerDirective])
         .directive("ngMapLayer", ["$timeout", "$parse", MapLayerDirective])
 
         .directive("ngMapPolyline", [MapPolylineDirective])

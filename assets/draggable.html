@@ -38,7 +38,7 @@
         <div class="ng-map-zoom" value="13"></div>
 
         <div class="ng-map-marker" lat="AppCtrl.markerPosition.lat()" lng="AppCtrl.markerPosition.lng()" draggable="true" event-drag="AppCtrl.onDrag($event, $ngMap)" event-dragstart="AppCtrl.onDragStart($event, $ngMap)" event-dragend="AppCtrl.onDragEnd($event, $ngMap)">
-            <div class="marker"></div>
+            <div class="marker" ng-class="{dragging: $dragging}"></div>
         </div>
     </div>
 
