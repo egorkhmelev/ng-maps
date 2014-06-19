@@ -649,7 +649,7 @@
           weight: "=weight"
         },
         link: function(scope, element, attrs, ctrl) {
-          var poly;
+          var eventName, k, poly, polylineEventListeners, v;
           poly = new ctrl.api.Polyline();
           poly.setMap(ctrl.map);
           scope.$watch("path", function(pathSrc) {
@@ -673,7 +673,34 @@
           }, function(options) {
             return poly.setOptions(options);
           }, true);
+          polylineEventListeners = [];
+          for (k in attrs) {
+            v = attrs[k];
+            if (k.indexOf("event") !== 0) {
+              continue;
+            }
+            if ((eventName = getEventName(k))) {
+              (function(k, v) {
+                var listener;
+                listener = ctrl.api.event.addListener(poly, eventName, function(event) {
+                  var locals;
+                  locals = {};
+                  if (event) {
+                    locals["$event"] = event;
+                  }
+                  locals["$poly"] = poly;
+                  return $parse(v)(scope.$parent, locals);
+                });
+                return polylineEventListeners.push(listener);
+              })(k, v);
+            }
+          }
           return scope.$on("$destroy", function() {
+            var l, _i, _len;
+            for (_i = 0, _len = polylineEventListeners.length; _i < _len; _i++) {
+              l = polylineEventListeners[_i];
+              ctrl.api.event.removeListener(l);
+            }
             return poly.setMap(null);
           });
         }
@@ -713,7 +740,7 @@
         }
       ];
     };
-    return module.provider("$ngMaps", [MapsProvider]).directive("ngMap", ["$parse", "$timeout", "$window", MapDirective]).directive("ngMapCenter", ["$timeout", MapCenterDirective]).directive("ngMapZoom", ["$timeout", MapZoomDirective]).directive("ngMapFit", ["$timeout", MapFitDirective]).directive("ngMapMarker", ["$parse", "$timeout", MapMarkerDirective]).directive("ngMapLayer", ["$timeout", "$parse", MapLayerDirective]).directive("ngMapPolyline", [MapPolylineDirective]).directive("ngMapTc", $MapControlDirective('tc')).directive("ngMapTl", $MapControlDirective('tl')).directive("ngMapTr", $MapControlDirective('tr')).directive("ngMapLt", $MapControlDirective('lt')).directive("ngMapRt", $MapControlDirective('rt')).directive("ngMapLc", $MapControlDirective('lc')).directive("ngMapRc", $MapControlDirective('rc')).directive("ngMapLb", $MapControlDirective('lb')).directive("ngMapRb", $MapControlDirective('rb')).directive("ngMapBc", $MapControlDirective('bc')).directive("ngMapBl", $MapControlDirective('bl')).directive("ngMapBr", $MapControlDirective('br'));
+    return module.provider("$ngMaps", [MapsProvider]).directive("ngMap", ["$parse", "$timeout", "$window", MapDirective]).directive("ngMapCenter", ["$timeout", MapCenterDirective]).directive("ngMapZoom", ["$timeout", MapZoomDirective]).directive("ngMapFit", ["$timeout", MapFitDirective]).directive("ngMapMarker", ["$parse", "$timeout", MapMarkerDirective]).directive("ngMapLayer", ["$timeout", "$parse", MapLayerDirective]).directive("ngMapPolyline", ["$parse", MapPolylineDirective]).directive("ngMapTc", $MapControlDirective('tc')).directive("ngMapTl", $MapControlDirective('tl')).directive("ngMapTr", $MapControlDirective('tr')).directive("ngMapLt", $MapControlDirective('lt')).directive("ngMapRt", $MapControlDirective('rt')).directive("ngMapLc", $MapControlDirective('lc')).directive("ngMapRc", $MapControlDirective('rc')).directive("ngMapLb", $MapControlDirective('lb')).directive("ngMapRb", $MapControlDirective('rb')).directive("ngMapBc", $MapControlDirective('bc')).directive("ngMapBl", $MapControlDirective('bl')).directive("ngMapBr", $MapControlDirective('br'));
   })(window.angular);
 
 }).call(this);
