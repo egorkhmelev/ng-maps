@@ -541,7 +541,24 @@
                 poly.setOptions(options)
             , true
 
+
+            polylineEventListeners = []
+            for k, v of attrs
+                continue unless k.indexOf("event") is 0
+                if (eventName = getEventName(k))
+                    do (k, v) ->
+                        listener = ctrl.api.event.addListener(poly, eventName, (event) ->
+                            locals = {}
+                            locals["$event"] = event if event
+                            locals["$poly"] = poly
+
+                            $parse(v)(scope.$parent, locals)
+                        )
+
+                        polylineEventListeners.push(listener)
+
             scope.$on "$destroy", ->
+                ctrl.api.event.removeListener(l) for l in polylineEventListeners
                 poly.setMap(null)
 
 
@@ -583,7 +600,7 @@
         .directive("ngMapMarker", ["$parse", "$timeout", MapMarkerDirective])
         .directive("ngMapLayer", ["$timeout", "$parse", MapLayerDirective])
 
-        .directive("ngMapPolyline", [MapPolylineDirective])
+        .directive("ngMapPolyline", ["$parse", MapPolylineDirective])
 
         .directive("ngMapTc", $MapControlDirective('tc'))
         .directive("ngMapTl", $MapControlDirective('tl'))
