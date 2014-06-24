@@ -89,9 +89,9 @@
 
         Marker.prototype.setDraggable = function(draggable) {
           if (draggable) {
-            return this.$element.on("mousedown", angular.bind(this, this._startDrag));
+            return this.$element.on("mousedown.marker", angular.bind(this, this._startDrag));
           } else {
-            return this.$element.off("mousedown", this._startDrag);
+            return this.$element.off("mousedown.marker");
           }
         };
 
