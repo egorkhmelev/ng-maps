@@ -69,9 +69,9 @@
 
             setDraggable: (draggable) ->
                 if draggable
-                    @$element.on("mousedown", angular.bind(this, @_startDrag))
+                    @$element.on("mousedown.marker", angular.bind(this, @_startDrag))
                 else
-                    @$element.off("mousedown", @_startDrag)
+                    @$element.off("mousedown.marker")
 
 
             draw: ->
